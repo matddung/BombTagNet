@@ -13,6 +13,8 @@ enum class EBombTagMatchResult : uint8
     Lose
 };
 
+DECLARE_MULTICAST_DELEGATE(FOnWaitingRoomJoinSucceeded);
+
 UCLASS()
 class GAME_API UBombTagGameInstance : public UGameInstance
 {
@@ -36,11 +38,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Profile")
     void ResetPlayerRecord();
 
-    UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
-    void HostOnlineSession(const FString& SessionName, int32 MaxPlayers);
+    FOnWaitingRoomJoinSucceeded& OnWaitingRoomJoinSucceeded() { return WaitingRoomJoinSucceededDelegate; }
 
     UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
-    void FindAndJoinSession(const FString& SessionName);
+    void HostOnlineSession(const FString& SessionName, const FString& SessionPassword, int32 MaxPublicConnections, bool bIsLanMatch);
+
+    UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
+    void FindAndJoinSession(const FString& SessionName, const FString& SessionPassword, bool bIsLanQuery);
+
+    UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
+    void StartHostedMatch();
 
     UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
     void LeaveSession();
@@ -52,9 +59,26 @@ private:
     bool IsValidNickname(const FString& Nickname) const;
     bool IsAsciiAlphanumeric(TCHAR Character) const;
 
+    void TravelToLobby();
+    void ReturnToMenuMap();
+
+private:
     UPROPERTY()
     UBombTagSaveGame* PlayerSaveGame = nullptr;
 
     FString CurrentSessionName;
-    FString CurrentPlayerNickname;
+    FString CurrentSessionPassword;
+    int32   CurrentMaxPlayers = 4;
+    bool    bCurrentIsLan = false;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
+    FName LobbyMapName = FName(TEXT("/Game/Maps/MenuMap"));
+
+    UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
+    FName MatchMapName = FName(TEXT("/Game/Maps/MainMap"));
+
+    UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
+    FString MenuReturnURL = TEXT("/Game/Maps/MenuMap");
+
+    FOnWaitingRoomJoinSucceeded WaitingRoomJoinSucceededDelegate;
 };

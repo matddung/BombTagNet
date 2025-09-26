@@ -22,18 +22,19 @@ void UBombTagGameInstance::SetPlayerNickname(const FString& NewNickname)
     LoadOrCreatePlayerData();
     if (!PlayerSaveGame) return;
 
-    FString Sanitized = NewNickname;
-    Sanitized.TrimStartAndEndInline();
-
-    if (!IsValidNickname(Sanitized))
+    FString Name = NewNickname;
+    Name.TrimStartAndEndInline();
+    if (!IsValidNickname(Name))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid nickname: %s"), *Sanitized);
+        UE_LOG(LogTemp, Warning, TEXT("Invalid nickname: %s"), *Name);
         return;
     }
 
-    PlayerSaveGame->Nickname = Sanitized;
-    SavePlayerData();
-    CurrentPlayerNickname = Sanitized;
+    if (PlayerSaveGame->Nickname != Name)
+    {
+        PlayerSaveGame->Nickname = Name;
+        SavePlayerData();
+    }
 }
 
 FString UBombTagGameInstance::GetPlayerNickname() const
@@ -47,9 +48,13 @@ void UBombTagGameInstance::RecordMatchResult(EBombTagMatchResult MatchResult)
     if (!PlayerSaveGame) return;
 
     if (MatchResult == EBombTagMatchResult::Win)
+    {
         PlayerSaveGame->Win++;
+    }
     else
+    {
         PlayerSaveGame->Lose++;
+    }
 
     SavePlayerData();
 }
@@ -77,27 +82,64 @@ void UBombTagGameInstance::ResetPlayerRecord()
     SavePlayerData();
 }
 
-void UBombTagGameInstance::HostOnlineSession(const FString& SessionName, int32 MaxPlayers)
-{
-    CurrentSessionName = SessionName;
-    UE_LOG(LogTemp, Log, TEXT("Hosting session: %s, MaxPlayers: %d"), *SessionName, MaxPlayers);
 
-    // Todo : Backend API Call
+void UBombTagGameInstance::HostOnlineSession(const FString& SessionName, const FString& SessionPassword, int32 MaxPublicConnections, bool bIsLanMatch)
+{
+    CurrentSessionName = SessionName.IsEmpty() ? TEXT("BombTag Session") : SessionName;
+    CurrentSessionPassword = SessionPassword;
+    CurrentMaxPlayers = FMath::Clamp(MaxPublicConnections, 1, 64);
+    bCurrentIsLan = bIsLanMatch;
+
+    UE_LOG(LogTemp, Log, TEXT("[Host] name='%s' pw='%s' max=%d lan=%d"), *CurrentSessionName, *CurrentSessionPassword, CurrentMaxPlayers, bCurrentIsLan ? 1 : 0);
+
+    // TODO: Backend API Call
+
+    WaitingRoomJoinSucceededDelegate.Broadcast();
+
+    TravelToLobby();
 }
 
-void UBombTagGameInstance::FindAndJoinSession(const FString& SessionName)
+void UBombTagGameInstance::FindAndJoinSession(const FString& SessionName, const FString& SessionPassword, bool /*bIsLanQuery*/)
 {
-    UE_LOG(LogTemp, Log, TEXT("Searching and joining session: %s"), *SessionName);
+    UE_LOG(LogTemp, Log, TEXT("[Join] name='%s' pw='%s'"), *SessionName, *SessionPassword);
 
-    // Todo : Backend API Call
+    // TODO: Backend API Call
+
+    WaitingRoomJoinSucceededDelegate.Broadcast();
+}
+
+void UBombTagGameInstance::StartHostedMatch()
+{
+    if (MatchMapName.IsNone())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MatchMapName is not set"));
+        return;
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (World->GetNetMode() != NM_Client)
+        {
+            UGameplayStatics::OpenLevel(World, MatchMapName, true, TEXT("listen"));
+            return;
+        }
+
+        UGameplayStatics::OpenLevel(World, MatchMapName, true);
+    }
 }
 
 void UBombTagGameInstance::LeaveSession()
 {
-    UE_LOG(LogTemp, Log, TEXT("Leaving session: %s"), *CurrentSessionName);
+    UE_LOG(LogTemp, Log, TEXT("LeaveSession"));
 
-    // Todo : Backend API Call
-    CurrentSessionName.Empty();
+    // TODO: Backend API Call
+
+    CurrentSessionName.Reset();
+    CurrentSessionPassword.Reset();
+    CurrentMaxPlayers = 4;
+    bCurrentIsLan = false;
+
+    ReturnToMenuMap();
 }
 
 void UBombTagGameInstance::LoadOrCreatePlayerData()
@@ -112,8 +154,14 @@ void UBombTagGameInstance::LoadOrCreatePlayerData()
     if (!PlayerSaveGame)
     {
         PlayerSaveGame = Cast<UBombTagSaveGame>(UGameplayStatics::CreateSaveGameObject(UBombTagSaveGame::StaticClass()));
-        PlayerSaveGame->Nickname = TEXT("Guest");
-        SavePlayerData();
+        if (PlayerSaveGame)
+        {
+            if (PlayerSaveGame->Nickname.IsEmpty())
+            {
+                PlayerSaveGame->Nickname = TEXT("Guest");
+            }
+            SavePlayerData();
+        }
     }
 
     EnsureNicknameIsValid();
@@ -133,9 +181,9 @@ void UBombTagGameInstance::EnsureNicknameIsValid()
 
     FString Name = PlayerSaveGame->Nickname;
     Name.TrimStartAndEndInline();
-
-    if (!IsValidNickname(Name))
+    if (!Name.IsEmpty() && !IsValidNickname(Name))
     {
+        UE_LOG(LogTemp, Warning, TEXT("Loaded invalid nickname '%s' - reset to Guest"), *Name);
         PlayerSaveGame->Nickname = TEXT("Guest");
         SavePlayerData();
     }
@@ -143,9 +191,8 @@ void UBombTagGameInstance::EnsureNicknameIsValid()
 
 bool UBombTagGameInstance::IsValidNickname(const FString& Nickname) const
 {
-    int32 Length = Nickname.Len();
-    if (Length < 3 || Length > 12) return false;
-
+    int32 L = Nickname.Len();
+    if (L < 4 || L > 10) return false;
     for (TCHAR C : Nickname)
     {
         if (!IsAsciiAlphanumeric(C)) return false;
@@ -158,4 +205,31 @@ bool UBombTagGameInstance::IsAsciiAlphanumeric(TCHAR Character) const
     return (Character >= '0' && Character <= '9') ||
         (Character >= 'A' && Character <= 'Z') ||
         (Character >= 'a' && Character <= 'z');
+}
+
+void UBombTagGameInstance::TravelToLobby()
+{
+    if (LobbyMapName.IsNone())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("LobbyMapName not set"));
+        return;
+    }
+    UGameplayStatics::OpenLevel(this, LobbyMapName, true, TEXT("listen"));
+}
+
+void UBombTagGameInstance::ReturnToMenuMap()
+{
+    if (MenuReturnURL.IsEmpty()) return;
+
+    if (UWorld* World = GetWorld())
+    {
+        if (World->GetNetMode() != NM_Client)
+        {
+            UGameplayStatics::OpenLevel(World, LobbyMapName, true);
+        }
+        else if (APlayerController* PC = GetFirstLocalPlayerController())
+        {
+            PC->ClientTravel(MenuReturnURL, TRAVEL_Absolute);
+        }
+    }
 }
