@@ -10,7 +10,7 @@ class UInputAction;
 class UStaticMeshComponent;
 struct FInputActionValue;
 
-UCLASS(Blueprintable /*, Abstract °¡´É*/, BlueprintType)
+UCLASS(abstract)
 class GAME_API ABombTagCharacter : public ACharacter
 {
 	GENERATED_BODY()

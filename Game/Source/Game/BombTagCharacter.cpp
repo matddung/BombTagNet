@@ -9,8 +9,6 @@
 #include "EnhancedInputSubsystems.h"
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
-#include "Engine/LocalPlayer.h"
-#include "InputActionValue.h"
 
 ABombTagCharacter::ABombTagCharacter()
 {
@@ -132,7 +130,6 @@ void ABombTagCharacter::DoInteract()
 			const float DistSq = FVector::DistSquared(Other->GetActorLocation(), GetActorLocation());
 			if (DistSq <= FMath::Square(BombTransferDistance))
 			{
-				// 서버에서만 값을 바꾸고, 복제에 맡긴다
 				SetHasBomb_Server(false);
 				Other->SetHasBomb_Server(true);
 				break;
