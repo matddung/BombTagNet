@@ -6,7 +6,7 @@
 
 class UResultEntryWidget;
 
-UCLASS(abstract)
+UCLASS()
 class GAME_API ABombTagGameMode : public AGameModeBase
 {
 	GENERATED_BODY()

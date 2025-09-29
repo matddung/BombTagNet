@@ -42,6 +42,8 @@ ABombTagCharacter::ABombTagCharacter()
 	BombIndicator->SetRelativeLocation(FVector(0.f, 0.f, 120.f));
 	BombIndicator->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BombIndicator->SetVisibility(false);
+
+	bReplicates = true;
 }
 
 void ABombTagCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -154,6 +156,7 @@ void ABombTagCharacter::SetHasBomb_Server(bool bNewHasBomb)
 
 void ABombTagCharacter::OnRep_HasBomb()
 {
+	UE_LOG(LogTemp, Warning, TEXT("%s HasBomb=%d"), *GetName(), bHasBomb);
 	if (BombIndicator)
 	{
 		BombIndicator->SetVisibility(bHasBomb);

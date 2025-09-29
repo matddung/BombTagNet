@@ -131,9 +131,12 @@ void ABombTagGameMode::StartNewRound()
         }
     }
 
+    UE_LOG(LogTemp, Warning, TEXT("StartNewRound: %d chars"), Characters.Num());
+
     if (Characters.Num() > 0)
     {
         const int32 Index = FMath::RandRange(0, Characters.Num() - 1);
+        UE_LOG(LogTemp, Warning, TEXT("Give bomb to: %s"), *Characters[Index]->GetName());
         Characters[Index]->SetHasBomb_Server(true);
     }
 }
