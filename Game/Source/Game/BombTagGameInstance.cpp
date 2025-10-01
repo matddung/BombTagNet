@@ -1,8 +1,12 @@
 #include "BombTagGameInstance.h"
 #include "BombTagSaveGame.h"
+#include "ApiClient.h"
+#include "AuthService.h"
+#include "RoomService.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
+#include "Misc/ConfigCacheIni.h"
 
 namespace
 {
@@ -13,7 +17,36 @@ namespace
 void UBombTagGameInstance::Init()
 {
     Super::Init();
+
+    FString BackendBaseUrl;
+    if (!GConfig->GetString(TEXT("Game.Net"), TEXT("BackendBaseUrl"), BackendBaseUrl, GGameIni))
+    {
+        BackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
+    }
+
+    float TimeoutSec = 10.0f;
+    GConfig->GetFloat(TEXT("Game.Net"), TEXT("HttpTimeoutSec"), TimeoutSec, GGameIni);
+
+    Api = NewObject<UApiClient>(this);
+    if (Api)
+    {
+        Api->Init(BackendBaseUrl, TimeoutSec);
+    }
+
+    Auth = NewObject<UAuthService>(this);
+    if (Auth && Api)
+    {
+        Auth->Init(Api);
+    }
+
+    Room = NewObject<URoomService>(this);
+    if (Room && Api)
+    {
+        Room->Init(Api);
+    }
+
     LoadOrCreatePlayerData();
+    PlayerNickname = GetPlayerNickname();
     UE_LOG(LogTemp, Log, TEXT("BombTag GameInstance initialized"));
 }
 
@@ -140,6 +173,148 @@ void UBombTagGameInstance::LeaveSession()
     bCurrentIsLan = false;
 
     ReturnToMenuMap();
+}
+
+void UBombTagGameInstance::Backend_GuestLogin(const FString& InNickname)
+{
+    if (!Auth)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Backend_GuestLogin failed: Auth service not ready"));
+        OnBackendLogin.Broadcast(false, TEXT("NOT_INITIALIZED"));
+        return;
+    }
+
+    const FString NickToUse = InNickname.IsEmpty() ? GetPlayerNickname() : InNickname;
+
+    Auth->GuestLogin(NickToUse, [this](bool bSuccess, const FGuestLoginRes& Response, const FString& Error)
+        {
+            if (!bSuccess)
+            {
+                UE_LOG(LogTemp, Error, TEXT("Guest login failed: %s"), *Error);
+                OnBackendLogin.Broadcast(false, Error);
+                return;
+            }
+
+            PlayerId = Response.PlayerId;
+            PlayerNickname = Response.Nickname;
+            AccessToken = Response.AccessToken;
+
+            if (Api)
+            {
+                Api->SetAuthToken(FString::Printf(TEXT("Bearer %s"), *AccessToken));
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("Logged in as %s (%s)"), *PlayerNickname, *PlayerId);
+            OnBackendLogin.Broadcast(true, FString());
+        });
+}
+
+void UBombTagGameInstance::Backend_CreateRoom(const FString& Name, int32 MaxPlayers, const FString& Password)
+{
+    if (!Room)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Backend_CreateRoom failed: Room service not ready"));
+        OnRoomJoined.Broadcast(false, TEXT("NOT_INITIALIZED"));
+        return;
+    }
+
+    Room->CreateRoom(Name, MaxPlayers, Password, [this](bool bSuccess, const FRoomSummary& RoomSummary, const FString& Error)
+        {
+            if (!bSuccess)
+            {
+                UE_LOG(LogTemp, Error, TEXT("CreateRoom failed: %s"), *Error);
+                OnRoomJoined.Broadcast(false, Error);
+                return;
+            }
+
+            CurrentRoomId = RoomSummary.RoomId;
+            UE_LOG(LogTemp, Log, TEXT("Room created: %s"), *CurrentRoomId);
+
+            OnRoomJoined.Broadcast(true, FString());
+            OnRoomUpdated.Broadcast(RoomSummary);
+        });
+}
+
+void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString& Password)
+{
+    if (!Room)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Backend_JoinRoom failed: Room service not ready"));
+        OnRoomJoined.Broadcast(false, TEXT("NOT_INITIALIZED"));
+        return;
+    }
+
+    Room->JoinRoom(RoomId, Password, [this](bool bSuccess, const FJoinRes& Result, const FString& Error)
+        {
+            if (!bSuccess)
+            {
+                UE_LOG(LogTemp, Error, TEXT("JoinRoom failed: %s"), *Error);
+                OnRoomJoined.Broadcast(false, Error);
+                return;
+            }
+
+            CurrentRoomId = Result.RoomId;
+            UE_LOG(LogTemp, Log, TEXT("Joined room %s (slot %d)"), *Result.RoomId, Result.Slot);
+
+            OnRoomJoined.Broadcast(true, FString());
+        });
+}
+
+void UBombTagGameInstance::Backend_GetRoom()
+{
+    if (!Room)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Backend_GetRoom failed: Room service not ready"));
+        return;
+    }
+
+    if (CurrentRoomId.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Backend_GetRoom skipped: CurrentRoomId is empty"));
+        return;
+    }
+
+    Room->GetRoom(CurrentRoomId, [this](bool bSuccess, const FRoomSummary& RoomSummary, const FString& Error)
+        {
+            if (!bSuccess)
+            {
+                UE_LOG(LogTemp, Error, TEXT("GetRoom failed: %s"), *Error);
+                return;
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("Room %s status=%s players=%d"), *RoomSummary.RoomId, *RoomSummary.Status, RoomSummary.CurrentPlayers);
+            OnRoomUpdated.Broadcast(RoomSummary);
+        });
+}
+
+void UBombTagGameInstance::Backend_StartRoom()
+{
+    if (!Room)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Backend_StartRoom failed: Room service not ready"));
+        OnRoomStarted.Broadcast(false, TEXT("NOT_INITIALIZED"));
+        return;
+    }
+
+    if (CurrentRoomId.IsEmpty())
+    {
+        UE_LOG(LogTemp, Error, TEXT("Backend_StartRoom failed: CurrentRoomId is empty"));
+        OnRoomStarted.Broadcast(false, TEXT("NO_ROOM"));
+        return;
+    }
+
+    Room->StartRoom(CurrentRoomId, [this](bool bSuccess, const FString& MatchId, const FString& Error)
+        {
+            if (!bSuccess)
+            {
+                UE_LOG(LogTemp, Error, TEXT("StartRoom failed: %s"), *Error);
+                OnRoomStarted.Broadcast(false, Error);
+                return;
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("MatchId=%s"), *MatchId);
+            OnRoomStarted.Broadcast(true, MatchId);
+        });
 }
 
 void UBombTagGameInstance::LoadOrCreatePlayerData()

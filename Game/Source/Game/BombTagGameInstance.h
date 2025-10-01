@@ -2,9 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
+#include "RoomService.h"
 #include "BombTagGameInstance.generated.h"
 
 class UBombTagSaveGame;
+class UApiClient;
+class UAuthService;
+class URoomService;
 
 UENUM(BlueprintType)
 enum class EBombTagMatchResult : uint8
@@ -14,11 +18,15 @@ enum class EBombTagMatchResult : uint8
 };
 
 DECLARE_MULTICAST_DELEGATE(FOnWaitingRoomJoinSucceeded);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBackendLogin, bool, bSuccess, const FString&, ErrorMessage);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomJoined, bool, bSuccess, const FString&, ErrorMessage);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomUpdated, const FRoomSummary&, RoomSummary);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomStarted, bool, bSuccess, const FString&, Info);
 
 UCLASS()
 class GAME_API UBombTagGameInstance : public UGameInstance
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 	
 public:
     virtual void Init() override;
@@ -52,6 +60,33 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
     void LeaveSession();
 
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_GuestLogin(const FString& InNickname);
+
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_CreateRoom(const FString& Name, int32 MaxPlayers, const FString& Password);
+
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_JoinRoom(const FString& RoomId, const FString& Password);
+
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_GetRoom();
+
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_StartRoom();
+
+    UPROPERTY(BlueprintAssignable, Category = "Backend")
+    FOnBackendLogin OnBackendLogin;
+
+    UPROPERTY(BlueprintAssignable, Category = "Backend")
+    FOnRoomJoined OnRoomJoined;
+
+    UPROPERTY(BlueprintAssignable, Category = "Backend")
+    FOnRoomUpdated OnRoomUpdated;
+
+    UPROPERTY(BlueprintAssignable, Category = "Backend")
+    FOnRoomStarted OnRoomStarted;
+
 private:
     void LoadOrCreatePlayerData();
     void SavePlayerData();
@@ -66,10 +101,24 @@ private:
     UPROPERTY()
     UBombTagSaveGame* PlayerSaveGame = nullptr;
 
+    UPROPERTY()
+    TObjectPtr<UApiClient> Api = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UAuthService> Auth = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<URoomService> Room = nullptr;
+
     FString CurrentSessionName;
     FString CurrentSessionPassword;
     int32   CurrentMaxPlayers = 4;
     bool    bCurrentIsLan = false;
+
+    FString PlayerId;
+    FString PlayerNickname;
+    FString AccessToken;
+    FString CurrentRoomId;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName LobbyMapName = FName(TEXT("/Game/Maps/MenuMap"));

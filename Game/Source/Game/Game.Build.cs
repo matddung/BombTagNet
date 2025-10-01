@@ -14,7 +14,10 @@ public class Game : ModuleRules
             "InputCore",
             "NetCore",
             "Networking",
-            "EnhancedInput"
+            "EnhancedInput",
+            "HTTP",
+            "Json",
+            "JsonUtilities"
         });
 
         if (Target.Type != TargetType.Server)
