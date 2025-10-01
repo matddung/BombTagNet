@@ -101,13 +101,22 @@ void UMainMenuWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    GetWorld()->GetTimerManager().SetTimer(MatchDotsTimerHandle, this, &UMainMenuWidget::UpdateMatchMenuDots, 0.4f, true);
-
-    if (UWorld* W = GetWorld())
+    if (UWorld* World = GetWorld())
     {
-        if (UBombTagGameInstance* GI = W->GetGameInstance<UBombTagGameInstance>())
+        World->GetTimerManager().SetTimer(MatchDotsTimerHandle, this, &UMainMenuWidget::UpdateMatchMenuDots, 0.4f, true);
+
+        if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
         {
-            GI->OnWaitingRoomJoinSucceeded().AddUObject(this, &UMainMenuWidget::HandleWaitingRoomJoinSucceeded);
+            GI->OnBackendLogin.AddDynamic(this, &UMainMenuWidget::HandleBackendLogin);
+            GI->OnRoomJoined.AddDynamic(this, &UMainMenuWidget::HandleRoomJoined);
+            GI->OnRoomUpdated.AddDynamic(this, &UMainMenuWidget::HandleRoomUpdated);
+            GI->OnRoomStarted.AddDynamic(this, &UMainMenuWidget::HandleRoomStarted);
+
+            if (!bGuestLoginRequested)
+            {
+                GI->Backend_GuestLogin(GI->GetPlayerNickname());
+                bGuestLoginRequested = true;
+            }
         }
     }
 
@@ -139,6 +148,17 @@ void UMainMenuWidget::NativeDestruct()
 {
     StopWaitingRoomSlotUpdates();
 
+    if (UWorld* World = GetWorld())
+    {
+        if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
+        {
+            GI->OnBackendLogin.RemoveDynamic(this, &UMainMenuWidget::HandleBackendLogin);
+            GI->OnRoomJoined.RemoveDynamic(this, &UMainMenuWidget::HandleRoomJoined);
+            GI->OnRoomUpdated.RemoveDynamic(this, &UMainMenuWidget::HandleRoomUpdated);
+            GI->OnRoomStarted.RemoveDynamic(this, &UMainMenuWidget::HandleRoomStarted);
+        }
+    }
+
     Super::NativeDestruct();
 }
 
@@ -151,12 +171,14 @@ void UMainMenuWidget::OpenMatchMenu()
 void UMainMenuWidget::OpenHostMenu()
 {
     StopWaitingRoomSlotUpdates();
+    ShowErrorMessage(HostMenuErrorText, FString());
     if (MenuSwitcher && HostMenu) MenuSwitcher->SetActiveWidget(HostMenu);
 }
 
 void UMainMenuWidget::OpenJoinMenu()
 {
     StopWaitingRoomSlotUpdates();
+    ShowErrorMessage(JoinMenuErrorText, FString());
     if (MenuSwitcher && JoinMenu) MenuSwitcher->SetActiveWidget(JoinMenu);
 }
 
@@ -176,6 +198,7 @@ void UMainMenuWidget::OpenMainMenu()
 void UMainMenuWidget::OpenWaitingRoomMenu()
 {
     if (MenuSwitcher && WaitingRoomMenu) MenuSwitcher->SetActiveWidget(WaitingRoomMenu);
+    ShowErrorMessage(WaitingRoomMenuStatusText, FString());
     StartWaitingRoomSlotUpdates();
 }
 
@@ -188,6 +211,11 @@ void UMainMenuWidget::CreateHostMatch()
         Name.TrimStartAndEndInline();
     }
 
+    if (Name.IsEmpty())
+    {
+        Name = TEXT("BombTag Session");
+    }
+
     if (HostMenuPasswordCheckBox && HostMenuPasswordCheckBox->IsChecked() && HostMenuPasswordTextBox)
     {
         Password = HostMenuPasswordTextBox->GetText().ToString();
@@ -198,10 +226,14 @@ void UMainMenuWidget::CreateHostMatch()
     {
         if (UBombTagGameInstance* GI = W->GetGameInstance<UBombTagGameInstance>())
         {
-            GI->HostOnlineSession(Name, Password, 4, false);
+            PendingRoomRequest = ERoomRequestType::Host;
+            ShowErrorMessage(HostMenuErrorText, FString());
+            GI->Backend_CreateRoom(Name, 4, Password);
+            return;
         }
     }
-    EnterWaitingRoomForLocalPlayer();
+    PendingRoomRequest = ERoomRequestType::None;
+    ShowErrorMessage(HostMenuErrorText, TEXT("Failed to contact server"));
 }
 
 void UMainMenuWidget::JoinMatch()
@@ -224,11 +256,15 @@ void UMainMenuWidget::JoinMatch()
     {
         if (UBombTagGameInstance* GI = W->GetGameInstance<UBombTagGameInstance>())
         {
-            GI->FindAndJoinSession(Name, Password, false);
+            PendingRoomRequest = ERoomRequestType::Join;
+            ShowErrorMessage(JoinMenuErrorText, FString());
+            GI->Backend_JoinRoom(Name, Password);
+            return;
         }
     }
 
-    EnterWaitingRoomForLocalPlayer();
+    PendingRoomRequest = ERoomRequestType::None;
+    ShowErrorMessage(JoinMenuErrorText, TEXT("Failed to contact server"));
 }
 
 void UMainMenuWidget::OnHostMenuPasswordCheckBoxChanged(bool bIsChecked)
@@ -245,7 +281,12 @@ void UMainMenuWidget::WaitingRoomStart()
     {
         if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
         {
-            GI->StartHostedMatch();
+            if (WaitingRoomMenuStatusText)
+            {
+                WaitingRoomMenuStatusText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+                WaitingRoomMenuStatusText->SetText(NSLOCTEXT("WaitingRoom", "StartingMatch", "Starting match..."));
+            }
+            GI->Backend_StartRoom();
         }
     }
 }
@@ -293,11 +334,6 @@ void UMainMenuWidget::EnterWaitingRoomForLocalPlayer()
     OpenWaitingRoomMenu();
 }
 
-void UMainMenuWidget::HandleWaitingRoomJoinSucceeded()
-{
-    EnterWaitingRoomForLocalPlayer();
-}
-
 UWidgetSwitcher* UMainMenuWidget::GetWaitingRoomSlotSwitcher(int32 PlayerIndex) const
 {
     switch (PlayerIndex)
@@ -338,15 +374,17 @@ void UMainMenuWidget::StartWaitingRoomSlotUpdates()
 {
     if (UWorld* World = GetWorld())
     {
+        bIsWaitingRoomVisible = true;
         UpdateWaitingRoomSlotsFromGameState();
+        RequestRoomSummaryRefresh();
 
         if (!World->GetTimerManager().IsTimerActive(WaitingRoomRefreshTimerHandle))
         {
             World->GetTimerManager().SetTimer(
                 WaitingRoomRefreshTimerHandle,
                 this,
-                &UMainMenuWidget::UpdateWaitingRoomSlotsFromGameState,
-                1.0f,
+                &UMainMenuWidget::RequestRoomSummaryRefresh,
+                2.0f,
                 true
             );
         }
@@ -359,52 +397,58 @@ void UMainMenuWidget::StopWaitingRoomSlotUpdates()
     {
         World->GetTimerManager().ClearTimer(WaitingRoomRefreshTimerHandle);
     }
+
+    bIsWaitingRoomVisible = false;
+    bHasCachedSummary = false;
+    ResetWaitingRoomSlots();
+    ShowErrorMessage(WaitingRoomMenuStatusText, FString());
 }
 
 void UMainMenuWidget::UpdateWaitingRoomSlotsFromGameState()
 {
     ResetWaitingRoomSlots();
 
-    UWorld* World = GetWorld();
-    if (!World) return;
-
-    AGameStateBase* GS = World->GetGameState<AGameStateBase>();
-    if (!GS) return;
-
-    APlayerController* LPC = GetOwningPlayer();
-    APlayerState* LPS = LPC ? LPC->PlayerState : nullptr;
-
-    UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>();
-
-    TArray<APlayerState*> PSs = GS->PlayerArray;
-    PSs.Sort([](const APlayerState& A, const APlayerState& B)
-        {
-            return A.GetPlayerId() < B.GetPlayerId();
-        });
-
-    int32 PSlot = 1;
-    for (APlayerState* PS : PSs)
+    if (!bHasCachedSummary)
     {
-        if (!PS) continue;
-        if (PSlot > 4) break;
+        return;
+    }
 
-        int32 Win = 0, Lose = 0;
-        if (PS == LPS && GI)
+    UBombTagGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UBombTagGameInstance>() : nullptr;
+
+    TArray<FRoomPlayer> PlayersToDisplay = CachedRoomSummary.Players;
+
+    if (PlayersToDisplay.Num() == 0 && GI)
+    {
+        FRoomPlayer SelfPlayer;
+        SelfPlayer.PlayerId = TEXT("LocalPlayer");
+        SelfPlayer.Nickname = GI->GetPlayerNickname();
+        PlayersToDisplay.Add(SelfPlayer);
+    }
+
+    int32 Slots = 1;
+    for (const FRoomPlayer& Player : PlayersToDisplay)
+    {
+        if (Slots > 4)
+        {
+            break;
+        }
+
+        FString DisplayName = Player.Nickname;
+        if (DisplayName.IsEmpty())
+        {
+            DisplayName = Player.PlayerId;
+        }
+
+        int32 Win = 0;
+        int32 Lose = 0;
+        if (GI && !DisplayName.IsEmpty() && DisplayName.Equals(GI->GetPlayerNickname(), ESearchCase::IgnoreCase))
         {
             int32 Total = 0;
             GI->GetPlayerRecord(Win, Lose, Total);
         }
 
-        SetWaitingRoomSlotPopulated(PSlot, PS->GetPlayerName(), Win, Lose);
-        ++PSlot;
-    }
-
-    if (PSlot == 1 && GI)
-    {
-        FString Nick = GI->GetPlayerNickname();
-        int32 Win = 0, Lose = 0, Total = 0;
-        GI->GetPlayerRecord(Win, Lose, Total);
-        SetWaitingRoomSlotPopulated(1, Nick, Win, Lose);
+        SetWaitingRoomSlotPopulated(Slots, DisplayName, Win, Lose);
+        ++Slots;
     }
 }
 
@@ -525,6 +569,126 @@ void UMainMenuWidget::UpdateMatchMenuDots()
     const FText Base = NSLOCTEXT("Match", "Searching", "Searching for Match");
     if (MatchMenuTextBlock)
         MatchMenuTextBlock->SetText(FText::FromString(Base.ToString() + Dots));
+}
+
+void UMainMenuWidget::RequestRoomSummaryRefresh()
+{
+    if (!bIsWaitingRoomVisible)
+    {
+        return;
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
+        {
+            GI->Backend_GetRoom();
+        }
+    }
+}
+
+void UMainMenuWidget::ApplyRoomSummary(const FRoomSummary& RoomSummary)
+{
+    CachedRoomSummary = RoomSummary;
+    bHasCachedSummary = true;
+
+    if (bIsWaitingRoomVisible)
+    {
+        UpdateWaitingRoomSlotsFromGameState();
+    }
+}
+
+void UMainMenuWidget::ShowErrorMessage(UTextBlock* Target, const FString& Message)
+{
+    if (!Target)
+    {
+        return;
+    }
+
+    if (Message.IsEmpty())
+    {
+        Target->SetText(FText::GetEmpty());
+        Target->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+    }
+    else
+    {
+        Target->SetText(FText::FromString(Message));
+        Target->SetColorAndOpacity(FSlateColor(FLinearColor::Red));
+    }
+}
+
+void UMainMenuWidget::HandleBackendLogin(bool bSuccess, const FString& ErrorMessage)
+{
+    if (!bSuccess)
+    {
+        ShowErrorMessage(WaitingRoomMenuStatusText, FString::Printf(TEXT("Login failed: %s"), *ErrorMessage));
+    }
+    else
+    {
+        ShowErrorMessage(WaitingRoomMenuStatusText, FString());
+    }
+}
+
+void UMainMenuWidget::HandleRoomJoined(bool bSuccess, const FString& ErrorMessage)
+{
+    if (!bSuccess)
+    {
+        const FString& Message = ErrorMessage.IsEmpty() ? TEXT("Unknown error") : ErrorMessage;
+        switch (PendingRoomRequest)
+        {
+        case ERoomRequestType::Host:
+            ShowErrorMessage(HostMenuErrorText, Message);
+            break;
+        case ERoomRequestType::Join:
+            ShowErrorMessage(JoinMenuErrorText, Message);
+            break;
+        default:
+            break;
+        }
+
+        PendingRoomRequest = ERoomRequestType::None;
+        return;
+    }
+
+    ShowErrorMessage(HostMenuErrorText, FString());
+    ShowErrorMessage(JoinMenuErrorText, FString());
+    PendingRoomRequest = ERoomRequestType::None;
+
+    EnterWaitingRoomForLocalPlayer();
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
+        {
+            GI->Backend_GetRoom();
+        }
+    }
+}
+
+void UMainMenuWidget::HandleRoomUpdated(const FRoomSummary& RoomSummary)
+{
+    ApplyRoomSummary(RoomSummary);
+}
+
+void UMainMenuWidget::HandleRoomStarted(bool bSuccess, const FString& Info)
+{
+    if (!bSuccess)
+    {
+        const FString& Message = Info.IsEmpty() ? TEXT("Failed to start match") : Info;
+        ShowErrorMessage(WaitingRoomMenuStatusText, Message);
+        return;
+    }
+
+    ShowErrorMessage(WaitingRoomMenuStatusText, FString());
+    StopWaitingRoomSlotUpdates();
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
+        {
+            GI->StartHostedMatch();
+        }
+    }
 }
 
 #endif

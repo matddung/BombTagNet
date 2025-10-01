@@ -7,6 +7,18 @@
 class UApiClient;
 
 USTRUCT(BlueprintType)
+struct GAME_API FRoomPlayer
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString PlayerId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString Nickname;
+};
+
+USTRUCT(BlueprintType)
 struct GAME_API FRoomSummary
 {
     GENERATED_BODY()
@@ -25,18 +37,9 @@ struct GAME_API FRoomSummary
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
     int32 CurrentPlayers = 0;
-};
-
-USTRUCT(BlueprintType)
-struct GAME_API FRoomPlayer
-{
-    GENERATED_BODY()
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
-    FString PlayerId;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Room")
-    FString Nickname;
+    TArray<FRoomPlayer> Players;
 };
 
 USTRUCT(BlueprintType)

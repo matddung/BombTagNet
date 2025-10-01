@@ -1,5 +1,6 @@
 package com.BombTagNet.Backend.jwt;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,8 +33,16 @@ public class JwtService {
                 .compact();
     }
 
-    public String parseSubject(String token) {
+    private Claims parseClaims(String token) {
         return Jwts.parserBuilder().setSigningKey(key).build()
-                .parseClaimsJws(token).getBody().getSubject();
+                .parseClaimsJws(token).getBody();
+    }
+
+    public String parseSubject(String token) {
+        return parseClaims(token).getSubject();
+    }
+
+    public String parseNickname(String token) {
+        return parseClaims(token).get("nickname", String.class);
     }
 }

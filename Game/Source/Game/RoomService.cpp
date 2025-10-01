@@ -299,6 +299,8 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
     OutSummary.MinPlayers = static_cast<int32>(MinPlayersValue);
     OutSummary.MaxPlayers = static_cast<int32>(MaxPlayersValue);
 
+    ParseRoomPlayers(JsonObject, OutSummary.Players);
+
     if (JsonObject->TryGetNumberField(TEXT("currentPlayers"), CurrentPlayersValue))
     {
         OutSummary.CurrentPlayers = static_cast<int32>(CurrentPlayersValue);

@@ -21,6 +21,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     public JwtAuthFilter(JwtService jwt) { this.jwt = jwt; }
 
+    public record PlayerPrincipal(String playerId, String nickname) {}
+
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
@@ -32,7 +34,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             try {
                 String playerId = jwt.parseSubject(token);
-                Authentication auth = new UsernamePasswordAuthenticationToken(playerId, null, List.of());
+                String nickname = jwt.parseNickname(token);
+                PlayerPrincipal principal = new PlayerPrincipal(playerId, nickname);
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(principal, null, List.of());
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (Exception e) {
                 res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_TOKEN");

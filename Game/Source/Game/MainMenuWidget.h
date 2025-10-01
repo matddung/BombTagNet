@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "RoomService.h"
 #include "MainMenuWidget.generated.h"
 
 class UButton;
@@ -82,6 +83,9 @@ protected:
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UButton> HostMenuBackButton;
 
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UTextBlock> HostMenuErrorText;
+
     // JoinMenu
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UEditableTextBox> JoinMenuTitleTextBox;
@@ -94,6 +98,9 @@ protected:
 
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UButton> JoinMenuBackButton;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UTextBlock> JoinMenuErrorText;
 
     // MyRecordMenu
     UPROPERTY(meta = (BindWidgetOptional))
@@ -117,6 +124,9 @@ protected:
 
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UButton> WaitingRoomMenuStartButton;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UTextBlock> WaitingRoomMenuStatusText;
 
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UButton> WaitingRoomMenuPlayer1Button;
@@ -208,16 +218,37 @@ private:
     void SetWaitingRoomSlotWaiting(int32 PlayerIndex);
     void SetWaitingRoomSlotPopulated(int32 PlayerIndex, const FString& PlayerId, int32 WinCount, int32 LoseCount);
     void EnterWaitingRoomForLocalPlayer();
-    void HandleWaitingRoomJoinSucceeded();
     UWidgetSwitcher* GetWaitingRoomSlotSwitcher(int32 PlayerIndex) const;
     UTextBlock* GetWaitingRoomSlotIdText(int32 PlayerIndex) const;
     UTextBlock* GetWaitingRoomSlotRecordText(int32 PlayerIndex) const;
     void StartWaitingRoomSlotUpdates();
     void StopWaitingRoomSlotUpdates();
     void UpdateWaitingRoomSlotsFromGameState();
+    void RequestRoomSummaryRefresh();
+    void ApplyRoomSummary(const FRoomSummary& RoomSummary);
+
+    void ShowErrorMessage(UTextBlock* Target, const FString& Message);
+
+    UFUNCTION() void HandleBackendLogin(bool bSuccess, const FString& ErrorMessage);
+    UFUNCTION() void HandleRoomJoined(bool bSuccess, const FString& ErrorMessage);
+    UFUNCTION() void HandleRoomUpdated(const FRoomSummary& RoomSummary);
+    UFUNCTION() void HandleRoomStarted(bool bSuccess, const FString& Info);
 
     FTimerHandle   MatchDotsTimerHandle;
     int32          MatchDotCount = 1;
-    FDelegateHandle WaitingRoomJoinDelegateHandle;
     FTimerHandle   WaitingRoomRefreshTimerHandle;
+
+    enum class ERoomRequestType : uint8
+    {
+        None,
+        Host,
+        Join
+    };
+
+    ERoomRequestType PendingRoomRequest = ERoomRequestType::None;
+    bool bGuestLoginRequested = false;
+    bool bIsWaitingRoomVisible = false;
+
+    FRoomSummary CachedRoomSummary;
+    bool bHasCachedSummary = false;
 };

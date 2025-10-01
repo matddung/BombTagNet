@@ -26,6 +26,9 @@ public class RoomService {
     public Optional<Room> find(String roomId){ return Optional.ofNullable(rooms.get(roomId)); }
 
     public Room join(Room r, Player p, String password) {
+        if (r.contains(p.playerId())) {
+            return r;
+        }
         if (r.password() != null && !Objects.equals(r.password(), password))
             throw new IllegalStateException("WRONG_PASSWORD");
         if (!r.canJoin())

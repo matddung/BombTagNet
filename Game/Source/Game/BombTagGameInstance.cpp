@@ -124,21 +124,11 @@ void UBombTagGameInstance::HostOnlineSession(const FString& SessionName, const F
     bCurrentIsLan = bIsLanMatch;
 
     UE_LOG(LogTemp, Log, TEXT("[Host] name='%s' pw='%s' max=%d lan=%d"), *CurrentSessionName, *CurrentSessionPassword, CurrentMaxPlayers, bCurrentIsLan ? 1 : 0);
-
-    // TODO: Backend API Call
-
-    WaitingRoomJoinSucceededDelegate.Broadcast();
-
-    TravelToLobby();
 }
 
 void UBombTagGameInstance::FindAndJoinSession(const FString& SessionName, const FString& SessionPassword, bool /*bIsLanQuery*/)
 {
     UE_LOG(LogTemp, Log, TEXT("[Join] name='%s' pw='%s'"), *SessionName, *SessionPassword);
-
-    // TODO: Backend API Call
-
-    WaitingRoomJoinSucceededDelegate.Broadcast();
 }
 
 void UBombTagGameInstance::StartHostedMatch()
@@ -165,14 +155,10 @@ void UBombTagGameInstance::LeaveSession()
 {
     UE_LOG(LogTemp, Log, TEXT("LeaveSession"));
 
-    // TODO: Backend API Call
-
     CurrentSessionName.Reset();
     CurrentSessionPassword.Reset();
     CurrentMaxPlayers = 4;
     bCurrentIsLan = false;
-
-    ReturnToMenuMap();
 }
 
 void UBombTagGameInstance::Backend_GuestLogin(const FString& InNickname)
@@ -218,6 +204,10 @@ void UBombTagGameInstance::Backend_CreateRoom(const FString& Name, int32 MaxPlay
         return;
     }
 
+    CurrentSessionName = Name;
+    CurrentSessionPassword = Password;
+    CurrentMaxPlayers = MaxPlayers;
+
     Room->CreateRoom(Name, MaxPlayers, Password, [this](bool bSuccess, const FRoomSummary& RoomSummary, const FString& Error)
         {
             if (!bSuccess)
@@ -244,6 +234,9 @@ void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString
         return;
     }
 
+    CurrentSessionName = RoomId;
+    CurrentSessionPassword = Password;
+
     Room->JoinRoom(RoomId, Password, [this](bool bSuccess, const FJoinRes& Result, const FString& Error)
         {
             if (!bSuccess)
@@ -257,6 +250,15 @@ void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString
             UE_LOG(LogTemp, Log, TEXT("Joined room %s (slot %d)"), *Result.RoomId, Result.Slot);
 
             OnRoomJoined.Broadcast(true, FString());
+
+            FRoomSummary Summary;
+            Summary.RoomId = Result.RoomId;
+            Summary.Status = TEXT("WAITING");
+            Summary.MinPlayers = 2;
+            Summary.MaxPlayers = CurrentMaxPlayers > 0 ? CurrentMaxPlayers : 4;
+            Summary.CurrentPlayers = Result.Players.Num();
+            Summary.Players = Result.Players;
+            OnRoomUpdated.Broadcast(Summary);
         });
 }
 

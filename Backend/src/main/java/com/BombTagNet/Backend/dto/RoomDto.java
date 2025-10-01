@@ -9,7 +9,8 @@ public class RoomDto {
     public record CreateRoomReq(String name, Integer maxPlayers, String password) {
     }
 
-    public record RoomSummary(String roomId, String hostId, RoomStatus status, Integer minPlayers, Integer maxPlayers) {
+    public record RoomSummary(String roomId, String hostId, RoomStatus status, Integer minPlayers, Integer maxPlayers,
+                              Integer currentPlayers) {
     }
 
     public record JoinRoomReq(String password) {
@@ -19,6 +20,6 @@ public class RoomDto {
     }
 
     public record RoomDetail(String roomId, RoomStatus status, Integer minPlayers, Integer maxPlayers,
-                             List<Player> players) {
+                             Integer currentPlayers, List<Player> players) {
     }
 }
