@@ -27,6 +27,9 @@ struct GAME_API FRoomSummary
     FString RoomId;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString Name;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
     FString Status;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
@@ -67,6 +70,7 @@ public:
 
     void CreateRoom(const FString& Name, int32 MaxPlayers, const FString& Password, TFunction<void(bool bSuccess, const FRoomSummary& Room, const FString& Error)> Callback);
     void JoinRoom(const FString& RoomId, const FString& Password, TFunction<void(bool bSuccess, const FJoinRes& Result, const FString& Error)> Callback);
+    void LeaveRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FString& Error)> Callback);
     void GetRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FRoomSummary& Room, const FString& Error)> Callback);
     void StartRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FString& MatchId, const FString& Error)> Callback);
 

@@ -23,7 +23,25 @@ public class RoomService {
         return r;
     }
 
-    public Optional<Room> find(String roomId){ return Optional.ofNullable(rooms.get(roomId)); }
+    public Optional<Room> find(String roomId) {
+        if (roomId == null) {
+            return Optional.empty();
+        }
+
+        String normalized = roomId.trim();
+        if (normalized.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Room byId = rooms.get(normalized);
+        if (byId != null) {
+            return Optional.of(byId);
+        }
+
+        return rooms.values().stream()
+                .filter(r -> normalized.equalsIgnoreCase(r.name()))
+                .findFirst();
+    }
 
     public Room join(Room r, Player p, String password) {
         if (r.contains(p.playerId())) {
@@ -35,6 +53,36 @@ public class RoomService {
             throw new IllegalStateException("ROOM_FULL_OR_STARTED");
         r.add(p);
         return r;
+    }
+
+    public void leave(Room r, String playerId) {
+        if (r == null || playerId == null || playerId.isBlank()) {
+            return;
+        }
+
+        boolean wasHost = Objects.equals(r.hostId(), playerId);
+        if (!r.contains(playerId)) {
+            return;
+        }
+
+        r.remove(playerId);
+
+        if (wasHost) {
+            r.clearPlayers();
+            rooms.remove(r.roomId(), r);
+            r.setStatus(RoomStatus.WAITING);
+            return;
+        }
+
+        if (r.size() == 0) {
+            rooms.remove(r.roomId(), r);
+            r.setStatus(RoomStatus.WAITING);
+            return;
+        }
+
+        if (r.status() == RoomStatus.STARTED && r.size() < 2) {
+            r.setStatus(RoomStatus.WAITING);
+        }
     }
 
     public void start(Room r, String requesterId, int minPlayersNeeded) {

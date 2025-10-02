@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Room {
     private final String roomId;
-    private final String hostId;
+    private volatile String hostId;
     private final String name;
     private final int maxPlayers;
     private final String password;
@@ -30,6 +30,12 @@ public class Room {
 
     public String hostId() {
         return hostId;
+    }
+
+    public void assignHost(String hostId) {
+        if (hostId != null && !hostId.isBlank()) {
+            this.hostId = hostId;
+        }
     }
 
     public String name() {
@@ -74,5 +80,9 @@ public class Room {
 
     public void remove(String playerId) {
         players.remove(playerId);
+    }
+
+    public void clearPlayers() {
+        players.clear();
     }
 }

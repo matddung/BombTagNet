@@ -61,7 +61,7 @@ bool UMainMenuWidget::Initialize()
 
     if (WaitingRoomMenuBackButton)
     {
-        WaitingRoomMenuBackButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OpenMainMenu);
+        WaitingRoomMenuBackButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnWaitingRoomBackClicked);
     }
 
     if (HostMenuPasswordCheckBox)
@@ -111,6 +111,7 @@ void UMainMenuWidget::NativeConstruct()
             GI->OnRoomJoined.AddDynamic(this, &UMainMenuWidget::HandleRoomJoined);
             GI->OnRoomUpdated.AddDynamic(this, &UMainMenuWidget::HandleRoomUpdated);
             GI->OnRoomStarted.AddDynamic(this, &UMainMenuWidget::HandleRoomStarted);
+            GI->OnRoomClosed.AddDynamic(this, &UMainMenuWidget::HandleRoomClosed);
 
             if (!bGuestLoginRequested)
             {
@@ -193,6 +194,12 @@ void UMainMenuWidget::OpenMainMenu()
 {
     StopWaitingRoomSlotUpdates();
     if (MenuSwitcher && MainMenu) MenuSwitcher->SetActiveWidget(MainMenu);
+}
+
+void UMainMenuWidget::OnWaitingRoomBackClicked()
+{
+    RequestLeaveCurrentRoom();
+    OpenMainMenu();
 }
 
 void UMainMenuWidget::OpenWaitingRoomMenu()
@@ -402,6 +409,17 @@ void UMainMenuWidget::StopWaitingRoomSlotUpdates()
     bHasCachedSummary = false;
     ResetWaitingRoomSlots();
     ShowErrorMessage(WaitingRoomMenuStatusText, FString());
+}
+
+void UMainMenuWidget::RequestLeaveCurrentRoom()
+{
+    if (UWorld* World = GetWorld())
+    {
+        if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
+        {
+            GI->LeaveSession();
+        }
+    }
 }
 
 void UMainMenuWidget::UpdateWaitingRoomSlotsFromGameState()
@@ -689,6 +707,23 @@ void UMainMenuWidget::HandleRoomStarted(bool bSuccess, const FString& Info)
             GI->StartHostedMatch();
         }
     }
+}
+
+void UMainMenuWidget::HandleRoomClosed(const FString& Reason)
+{
+    StopWaitingRoomSlotUpdates();
+
+    const FString DisplayMessage = Reason.Contains(TEXT("ROOM_NOT_FOUND"))
+        ? TEXT("The rooom owner closed the room.")
+        : (Reason.IsEmpty() ? TEXT("The room has been closed.") : Reason);
+
+    if (MenuSwitcher && JoinMenu)
+    {
+        MenuSwitcher->SetActiveWidget(JoinMenu);
+    }
+
+    ShowErrorMessage(JoinMenuErrorText, DisplayMessage);
+    PendingRoomRequest = ERoomRequestType::None;
 }
 
 #endif

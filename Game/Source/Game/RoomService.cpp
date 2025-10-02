@@ -161,6 +161,48 @@ void URoomService::JoinRoom(const FString& RoomId, const FString& Password, TFun
     ApiClient->PostJson(Path, Content, MoveTemp(Response));
 }
 
+void URoomService::LeaveRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FString& Error)> Callback)
+{
+    if (!ApiClient)
+    {
+        UE_LOG(LogTemp, Error, TEXT("LeaveRoom failed: ApiClient not initialized"));
+        if (Callback)
+        {
+            Callback(false, TEXT("NOT_INITIALIZED"));
+        }
+        return;
+    }
+
+    if (RoomId.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("LeaveRoom skipped: RoomId is empty"));
+        if (Callback)
+        {
+            Callback(false, TEXT("INVALID_ROOM"));
+        }
+        return;
+    }
+
+    const FString Path = FString::Printf(TEXT("/rooms/%s/leave"), *RoomId);
+
+    FOnApiResponse Response;
+    Response.BindLambda([Callback](bool bOk, const FString& BodyOrError)
+        {
+            if (Callback)
+            {
+                if (!bOk)
+                {
+                    Callback(false, BodyOrError);
+                    return;
+                }
+
+                Callback(true, FString());
+            }
+        });
+
+    ApiClient->PostJson(Path, TEXT("{}"), MoveTemp(Response));
+}
+
 void URoomService::GetRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FRoomSummary& Room, const FString& Error)> Callback)
 {
     if (!ApiClient)
@@ -289,6 +331,7 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
     double CurrentPlayersValue = 0.0;
 
     if (!JsonObject->TryGetStringField(TEXT("roomId"), OutSummary.RoomId) ||
+        !JsonObject->TryGetStringField(TEXT("name"), OutSummary.Name) ||
         !JsonObject->TryGetStringField(TEXT("status"), OutSummary.Status) ||
         !JsonObject->TryGetNumberField(TEXT("minPlayers"), MinPlayersValue) ||
         !JsonObject->TryGetNumberField(TEXT("maxPlayers"), MaxPlayersValue))

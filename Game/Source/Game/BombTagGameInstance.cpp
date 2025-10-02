@@ -193,10 +193,19 @@ void UBombTagGameInstance::LeaveSession()
 {
     UE_LOG(LogTemp, Log, TEXT("LeaveSession"));
 
-    CurrentSessionName.Reset();
-    CurrentSessionPassword.Reset();
-    CurrentMaxPlayers = 4;
-    bCurrentIsLan = false;
+    if (Room && !CurrentRoomId.IsEmpty())
+    {
+        const FString RoomIdToLeave = CurrentRoomId;
+        Room->LeaveRoom(RoomIdToLeave, [RoomIdToLeave](bool bSuccess, const FString& Error)
+            {
+                if (!bSuccess)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("LeaveRoom failed for %s: %s"), *RoomIdToLeave, *Error);
+                }
+            });
+    }
+
+    ResetCurrentSessionState();
 }
 
 void UBombTagGameInstance::Backend_GuestLogin(const FString& InNickname)
@@ -323,6 +332,13 @@ void UBombTagGameInstance::Backend_GetRoom()
             if (!bSuccess)
             {
                 UE_LOG(LogTemp, Error, TEXT("GetRoom failed: %s"), *Error);
+                if (Error.Contains(TEXT("ROOM_NOT_FOUND")))
+                {
+                    const FString LostRoomId = CurrentRoomId;
+                    UE_LOG(LogTemp, Warning, TEXT("Room %s no longer exists; clearing local room state"), *LostRoomId);
+                    ResetCurrentSessionState();
+                    OnRoomClosed.Broadcast(TEXT("ROOM_NOT_FOUND"));
+                }
                 return;
             }
 
@@ -335,6 +351,16 @@ void UBombTagGameInstance::Backend_GetRoom()
                 OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
             }
         });
+}
+
+void UBombTagGameInstance::ResetCurrentSessionState()
+{
+    CurrentSessionName.Reset();
+    CurrentSessionPassword.Reset();
+    CurrentMaxPlayers = 4;
+    bCurrentIsLan = false;
+    CurrentRoomId.Reset();
+    bRoomHasStarted = false;
 }
 
 void UBombTagGameInstance::Backend_StartRoom()

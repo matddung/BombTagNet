@@ -192,6 +192,7 @@ private:
     UFUNCTION() void OpenJoinMenu();
     UFUNCTION() void OpenMyRecordMenu();
     UFUNCTION() void OpenMainMenu();
+    UFUNCTION() void OnWaitingRoomBackClicked();
 
     UFUNCTION() void CreateHostMatch();
     UFUNCTION() void UpdateMatchMenuDots();
@@ -223,6 +224,7 @@ private:
     UTextBlock* GetWaitingRoomSlotRecordText(int32 PlayerIndex) const;
     void StartWaitingRoomSlotUpdates();
     void StopWaitingRoomSlotUpdates();
+    void RequestLeaveCurrentRoom();
     void UpdateWaitingRoomSlotsFromGameState();
     void RequestRoomSummaryRefresh();
     void ApplyRoomSummary(const FRoomSummary& RoomSummary);
@@ -233,6 +235,7 @@ private:
     UFUNCTION() void HandleRoomJoined(bool bSuccess, const FString& ErrorMessage);
     UFUNCTION() void HandleRoomUpdated(const FRoomSummary& RoomSummary);
     UFUNCTION() void HandleRoomStarted(bool bSuccess, const FString& Info);
+    UFUNCTION() void HandleRoomClosed(const FString& Reason);
 
     FTimerHandle   MatchDotsTimerHandle;
     int32          MatchDotCount = 1;

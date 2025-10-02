@@ -22,6 +22,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBackendLogin, bool, bSuccess, co
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomJoined, bool, bSuccess, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomUpdated, const FRoomSummary&, RoomSummary);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomStarted, bool, bSuccess, const FString&, Info);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomClosed, const FString&, Reason);
 
 UCLASS()
 class GAME_API UBombTagGameInstance : public UGameInstance
@@ -87,6 +88,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Backend")
     FOnRoomStarted OnRoomStarted;
 
+    UPROPERTY(BlueprintAssignable, Category = "Backend")
+    FOnRoomClosed OnRoomClosed;
+
 private:
     void LoadOrCreatePlayerData();
     void SavePlayerData();
@@ -96,6 +100,7 @@ private:
 
     void TravelToLobby();
     void ReturnToMenuMap();
+    void ResetCurrentSessionState();
 
 private:
     UPROPERTY()

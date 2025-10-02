@@ -17,28 +17,42 @@ import java.util.List;
 public class RoomController {
     private final RoomService rooms;
 
-    public RoomController(RoomService rooms) { this.rooms = rooms; }
+    public RoomController(RoomService rooms) {
+        this.rooms = rooms;
+    }
 
     private String pid(Authentication auth) {
-        if (auth == null) { throw new IllegalStateException("UNAUTHENTICATED"); }
+        if (auth == null) {
+            throw new IllegalStateException("UNAUTHENTICATED");
+        }
         Object principal = auth.getPrincipal();
-        if (principal instanceof PlayerPrincipal pp) { return pp.playerId(); }
-        if (principal instanceof String s) { return s; }
+        if (principal instanceof PlayerPrincipal pp) {
+            return pp.playerId();
+        }
+        if (principal instanceof String s) {
+            return s;
+        }
         return principal == null ? null : principal.toString();
     }
 
     private String nicknameFromAuth(Authentication auth) {
-        if (auth == null) { throw new IllegalStateException("UNAUTHENTICATED"); }
+        if (auth == null) {
+            throw new IllegalStateException("UNAUTHENTICATED");
+        }
         Object principal = auth.getPrincipal();
         if (principal instanceof PlayerPrincipal pp) {
             String nickname = pp.nickname();
-            if (nickname != null && !nickname.isBlank()) { return nickname; }
+            if (nickname != null && !nickname.isBlank()) {
+                return nickname;
+            }
             return pp.playerId();
         }
         Object details = auth.getDetails();
         if (details instanceof PlayerPrincipal pp) {
             String nickname = pp.nickname();
-            if (nickname != null && !nickname.isBlank()) { return nickname; }
+            if (nickname != null && !nickname.isBlank()) {
+                return nickname;
+            }
             return pp.playerId();
         }
         return pid(auth);
@@ -49,7 +63,8 @@ public class RoomController {
         Room r = rooms.create(pid(auth), req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password());
         Player host = new Player(pid(auth), nicknameFromAuth(auth));
         r.add(host);
-        return ResponseEntity.ok(new RoomSummary(r.roomId(), r.hostId(), r.status(), 2, r.maxPlayers(), r.size()));
+        List<Player> players = List.copyOf(r.players());
+        return ResponseEntity.ok(new RoomSummary(r.roomId(), r.name(), r.hostId(), r.status(), 2, r.maxPlayers(), r.size(), players));
     }
 
     @PostMapping("/{roomId}/join")
@@ -61,10 +76,17 @@ public class RoomController {
         return ResponseEntity.ok(new JoinRoomRes(r.roomId(), slot, List.copyOf(r.players())));
     }
 
+    @PostMapping("/{roomId}/leave")
+    public ResponseEntity<?> leave(Authentication auth, @PathVariable String roomId) {
+        Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
+        rooms.leave(r, pid(auth));
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/{roomId}")
     public ResponseEntity<RoomDetail> get(Authentication auth, @PathVariable String roomId) {
         Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
-        return ResponseEntity.ok(new RoomDetail(r.roomId(), r.status(), 2, r.maxPlayers(), r.size(), List.copyOf(r.players())));
+        return ResponseEntity.ok(new RoomDetail(r.roomId(), r.name(), r.status(), 2, r.maxPlayers(), r.size(), List.copyOf(r.players())));
     }
 
     @PostMapping("/{roomId}/start")
