@@ -12,6 +12,39 @@ namespace
 {
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
+    const TCHAR* DefaultBackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
+
+    bool IsBackendBaseUrlValid(FString& Url)
+    {
+        Url.TrimStartAndEndInline();
+
+        if (Url.IsEmpty())
+        {
+            return false;
+        }
+
+        const FString SchemeDelimiter = TEXT("://");
+        const int32 SchemeIndex = Url.Find(SchemeDelimiter, ESearchCase::IgnoreCase, ESearchDir::FromStart);
+
+        if (SchemeIndex <= 0)
+        {
+            return false;
+        }
+
+        const int32 HostStartIndex = SchemeIndex + SchemeDelimiter.Len();
+        if (HostStartIndex >= Url.Len())
+        {
+            return false;
+        }
+
+        // Ensure the host isn't empty (e.g. "http:///path")
+        if (Url.Mid(HostStartIndex, 1) == TEXT("/"))
+        {
+            return false;
+        }
+
+        return true;
+    }
 }
 
 void UBombTagGameInstance::Init()
@@ -21,7 +54,12 @@ void UBombTagGameInstance::Init()
     FString BackendBaseUrl;
     if (!GConfig->GetString(TEXT("Game.Net"), TEXT("BackendBaseUrl"), BackendBaseUrl, GGameIni))
     {
-        BackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
+        BackendBaseUrl = DefaultBackendBaseUrl;
+    }
+    else if (!IsBackendBaseUrlValid(BackendBaseUrl))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid BackendBaseUrl '%s' in config; using default '%s'"), *BackendBaseUrl, DefaultBackendBaseUrl);
+        BackendBaseUrl = DefaultBackendBaseUrl;
     }
 
     float TimeoutSec = 10.0f;
@@ -220,6 +258,8 @@ void UBombTagGameInstance::Backend_CreateRoom(const FString& Name, int32 MaxPlay
             CurrentRoomId = RoomSummary.RoomId;
             UE_LOG(LogTemp, Log, TEXT("Room created: %s"), *CurrentRoomId);
 
+            bRoomHasStarted = false;
+
             OnRoomJoined.Broadcast(true, FString());
             OnRoomUpdated.Broadcast(RoomSummary);
         });
@@ -248,6 +288,8 @@ void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString
 
             CurrentRoomId = Result.RoomId;
             UE_LOG(LogTemp, Log, TEXT("Joined room %s (slot %d)"), *Result.RoomId, Result.Slot);
+
+            bRoomHasStarted = false;
 
             OnRoomJoined.Broadcast(true, FString());
 
@@ -286,6 +328,12 @@ void UBombTagGameInstance::Backend_GetRoom()
 
             UE_LOG(LogTemp, Log, TEXT("Room %s status=%s players=%d"), *RoomSummary.RoomId, *RoomSummary.Status, RoomSummary.CurrentPlayers);
             OnRoomUpdated.Broadcast(RoomSummary);
+
+            if (RoomSummary.Status.Equals(TEXT("STARTED"), ESearchCase::IgnoreCase) && !bRoomHasStarted)
+            {
+                bRoomHasStarted = true;
+                OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
+            }
         });
 }
 
@@ -315,6 +363,7 @@ void UBombTagGameInstance::Backend_StartRoom()
             }
 
             UE_LOG(LogTemp, Log, TEXT("MatchId=%s"), *MatchId);
+            bRoomHasStarted = true;
             OnRoomStarted.Broadcast(true, MatchId);
         });
 }

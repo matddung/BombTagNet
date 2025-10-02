@@ -16,6 +16,9 @@ Game/Binaries/
 Game/DerivedDataCache/
 Game/Intermediate/
 Game/Saved/
+!Game/Saved/Config/
+!Game/Saved/Config/WindowsEditor/
+!Game/Saved/Config/WindowsEditor/Game.ini
 Game/.vs/
 Game/.vscode/
 Game/Build/

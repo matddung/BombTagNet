@@ -112,13 +112,14 @@ private:
 
     FString CurrentSessionName;
     FString CurrentSessionPassword;
-    int32   CurrentMaxPlayers = 4;
-    bool    bCurrentIsLan = false;
+    int32 CurrentMaxPlayers = 4;
+    bool bCurrentIsLan = false;
 
     FString PlayerId;
     FString PlayerNickname;
     FString AccessToken;
     FString CurrentRoomId;
+    bool bRoomHasStarted = false;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName LobbyMapName = FName(TEXT("/Game/Maps/MenuMap"));
