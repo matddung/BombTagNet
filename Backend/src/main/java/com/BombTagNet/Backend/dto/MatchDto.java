@@ -1,5 +1,7 @@
 package com.BombTagNet.Backend.dto;
 
+import com.BombTagNet.Backend.dao.Player;
+
 import java.util.List;
 
 public class MatchDto {
@@ -10,5 +12,18 @@ public class MatchDto {
     }
 
     public record OkRes(boolean ok) {
+    }
+
+    public record MatchQueueStatusRes(
+            String ticketId,
+            String status,
+            Integer position,
+            Integer readyInSeconds,
+            Integer waitForFourthSeconds,
+            Integer minPlayers,
+            Integer maxPlayers,
+            String matchId,
+            List<Player> players
+    ) {
     }
 }

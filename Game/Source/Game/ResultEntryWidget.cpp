@@ -1,5 +1,6 @@
 #include "ResultEntryWidget.h"
 #include "BombTagPlayerController.h"
+#include "MenuGameMode.h"
 
 #include "Components/TextBlock.h"
 #include "GameFramework/GameStateBase.h"
@@ -90,13 +91,20 @@ void UResultEntryWidget::GoToMenu()
 {
     if (APlayerController* PC = GetOwningPlayer())
     {
-        PC->ClientTravel(TEXT("/Game/Maps/MenuMap?game=/Script/BombTag.MenuGameMode"), TRAVEL_Absolute);
+        const FString GameModePath = AMenuGameMode::StaticClass()->GetPathName();
+        const FString TravelURL = GameModePath.IsEmpty()
+            ? FString(TEXT("/Game/Maps/MenuMap"))
+            : FString::Printf(TEXT("/Game/Maps/MenuMap?game=%s"), *GameModePath);
+        PC->ClientTravel(TravelURL, TRAVEL_Absolute);
         return;
     }
 
     if (UWorld* World = GetWorld())
     {
-        const FString Options = TEXT("game=/Script/BombTag.MenuGameMode");
+        const FString GameModePath = AMenuGameMode::StaticClass()->GetPathName();
+        const FString Options = GameModePath.IsEmpty()
+            ? FString()
+            : FString::Printf(TEXT("game=%s"), *GameModePath);
         UGameplayStatics::OpenLevel(World, FName(TEXT("/Game/Maps/MenuMap")), true, Options);
     }
 }

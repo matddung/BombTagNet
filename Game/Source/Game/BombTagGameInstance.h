@@ -2,13 +2,16 @@
 
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
+#include "TimerManager.h"
 #include "RoomService.h"
+#include "MatchService.h"
 #include "BombTagGameInstance.generated.h"
 
 class UBombTagSaveGame;
 class UApiClient;
 class UAuthService;
 class URoomService;
+class UMatchService;
 
 UENUM(BlueprintType)
 enum class EBombTagMatchResult : uint8
@@ -23,6 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomJoined, bool, bSuccess, cons
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomUpdated, const FRoomSummary&, RoomSummary);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomStarted, bool, bSuccess, const FString&, Info);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomClosed, const FString&, Reason);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchQueueStatus, bool, bSuccess, const FMatchQueueStatus&, Status, const FString&, ErrorMessage);
 
 UCLASS()
 class GAME_API UBombTagGameInstance : public UGameInstance
@@ -76,6 +80,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Backend")
     void Backend_StartRoom();
 
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_JoinMatchQueue();
+
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_LeaveMatchQueue();
+
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void Backend_QueryMatchQueueStatus();
+
     UPROPERTY(BlueprintAssignable, Category = "Backend")
     FOnBackendLogin OnBackendLogin;
 
@@ -91,6 +104,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Backend")
     FOnRoomClosed OnRoomClosed;
 
+    UPROPERTY(BlueprintAssignable, Category = "Backend")
+    FOnMatchQueueStatus OnMatchQueueStatus;
+
 private:
     void LoadOrCreatePlayerData();
     void SavePlayerData();
@@ -101,6 +117,10 @@ private:
     void TravelToLobby();
     void ReturnToMenuMap();
     void ResetCurrentSessionState();
+    void ResetMatchQueueState();
+    void StartMatchQueuePolling();
+    void StopMatchQueuePolling();
+    void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
 
 private:
     UPROPERTY()
@@ -115,6 +135,9 @@ private:
     UPROPERTY()
     TObjectPtr<URoomService> Room = nullptr;
 
+    UPROPERTY()
+    TObjectPtr<UMatchService> Match = nullptr;
+
     FString CurrentSessionName;
     FString CurrentSessionPassword;
     int32 CurrentMaxPlayers = 4;
@@ -125,6 +148,12 @@ private:
     FString AccessToken;
     FString CurrentRoomId;
     bool bRoomHasStarted = false;
+
+    FString CurrentMatchTicketId;
+    bool bMatchQueueLaunched = false;
+    bool bHasMatchQueueStatus = false;
+    FMatchQueueStatus CachedMatchQueueStatus;
+    FTimerHandle MatchQueuePollTimerHandle;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName LobbyMapName = FName(TEXT("/Game/Maps/MenuMap"));

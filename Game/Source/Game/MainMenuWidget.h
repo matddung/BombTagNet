@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "RoomService.h"
+#include "MatchService.h"
 #include "MainMenuWidget.generated.h"
 
 class UButton;
@@ -187,28 +188,59 @@ protected:
     TObjectPtr<UTextBlock> NewNicknameMenuErrorText;
 
 private:
-    UFUNCTION() void OpenMatchMenu();
-    UFUNCTION() void OpenHostMenu();
-    UFUNCTION() void OpenJoinMenu();
-    UFUNCTION() void OpenMyRecordMenu();
-    UFUNCTION() void OpenMainMenu();
-    UFUNCTION() void OnWaitingRoomBackClicked();
+    UFUNCTION()
+    void OpenMatchMenu();
 
-    UFUNCTION() void CreateHostMatch();
-    UFUNCTION() void UpdateMatchMenuDots();
-    UFUNCTION() void JoinMatch();
+    UFUNCTION()
+    void OpenHostMenu();
 
-    UFUNCTION() void OnHostMenuPasswordCheckBoxChanged(bool bIsChecked);
+    UFUNCTION() 
+    void OpenJoinMenu();
 
-    UFUNCTION() void OpenWaitingRoomMenu();
-    UFUNCTION() void WaitingRoomStart();
-    UFUNCTION() void WaitingRoomPlayerMenu(int32 PlayerIndex);
+    UFUNCTION() 
+    void OpenMyRecordMenu();
+
+    UFUNCTION() 
+    void OpenMainMenu();
+
+    UFUNCTION() 
+    void OnWaitingRoomBackClicked();
+
+    UFUNCTION()
+    void CreateHostMatch();
+
+    UFUNCTION() 
+    void UpdateMatchMenuDots();
+
+    UFUNCTION() 
+    void JoinMatch();
+
+    void JoinMatchQueue();
+    void LeaveMatchQueue();
+    void SetMatchMenuStatus(const FText& StatusText, bool bAnimateDots, const FLinearColor& Color = FLinearColor::White);
+
+    UFUNCTION() 
+    void OnHostMenuPasswordCheckBoxChanged(bool bIsChecked);
+
+    UFUNCTION() 
+    void OpenWaitingRoomMenu();
+
+    UFUNCTION() 
+    void WaitingRoomStart();
+
+    UFUNCTION() 
+    void WaitingRoomPlayerMenu(int32 PlayerIndex);
 
     void UpdateMyRecordMenu();
 
-    UFUNCTION() void OpenNewNicknameMenu();
-    UFUNCTION() void ConfirmNewNickname();
-    UFUNCTION() void OnNewNicknameTextChanged(const FText& NewText);
+    UFUNCTION() 
+    void OpenNewNicknameMenu();
+
+    UFUNCTION() 
+    void ConfirmNewNickname();
+
+    UFUNCTION() 
+    void OnNewNicknameTextChanged(const FText& NewText);
 
     bool   IsValidNickname(const FString& Nickname) const;
     FText  GetNicknameValidationErrorText(const FString& Nickname) const;
@@ -231,14 +263,28 @@ private:
 
     void ShowErrorMessage(UTextBlock* Target, const FString& Message);
 
-    UFUNCTION() void HandleBackendLogin(bool bSuccess, const FString& ErrorMessage);
-    UFUNCTION() void HandleRoomJoined(bool bSuccess, const FString& ErrorMessage);
-    UFUNCTION() void HandleRoomUpdated(const FRoomSummary& RoomSummary);
-    UFUNCTION() void HandleRoomStarted(bool bSuccess, const FString& Info);
-    UFUNCTION() void HandleRoomClosed(const FString& Reason);
+    UFUNCTION() 
+    void HandleBackendLogin(bool bSuccess, const FString& ErrorMessage);
+
+    UFUNCTION() 
+    void HandleRoomJoined(bool bSuccess, const FString& ErrorMessage);
+
+    UFUNCTION() 
+    void HandleRoomUpdated(const FRoomSummary& RoomSummary);
+
+    UFUNCTION() 
+    void HandleRoomStarted(bool bSuccess, const FString& Info);
+
+    UFUNCTION() 
+    void HandleRoomClosed(const FString& Reason);
+
+    UFUNCTION() 
+    void HandleMatchQueueStatus(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
 
     FTimerHandle   MatchDotsTimerHandle;
     int32          MatchDotCount = 1;
+    FText          MatchMenuBaseText;
+    bool           bAnimateMatchMenuDots = true;
     FTimerHandle   WaitingRoomRefreshTimerHandle;
 
     enum class ERoomRequestType : uint8

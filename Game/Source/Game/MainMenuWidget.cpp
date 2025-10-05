@@ -1,5 +1,6 @@
 #include "MainMenuWidget.h"
 #include "BombTagGameInstance.h"
+#include "MatchService.h"
 
 #include "Components/Button.h"
 #include "Components/WidgetSwitcher.h"
@@ -101,6 +102,8 @@ void UMainMenuWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
+    MatchMenuBaseText = NSLOCTEXT("Match", "Searching", "Searching for Match");
+
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().SetTimer(MatchDotsTimerHandle, this, &UMainMenuWidget::UpdateMatchMenuDots, 0.4f, true);
@@ -112,6 +115,7 @@ void UMainMenuWidget::NativeConstruct()
             GI->OnRoomUpdated.AddDynamic(this, &UMainMenuWidget::HandleRoomUpdated);
             GI->OnRoomStarted.AddDynamic(this, &UMainMenuWidget::HandleRoomStarted);
             GI->OnRoomClosed.AddDynamic(this, &UMainMenuWidget::HandleRoomClosed);
+            GI->OnMatchQueueStatus.AddDynamic(this, &UMainMenuWidget::HandleMatchQueueStatus);
 
             if (!bGuestLoginRequested)
             {
@@ -148,6 +152,7 @@ void UMainMenuWidget::NativeConstruct()
 void UMainMenuWidget::NativeDestruct()
 {
     StopWaitingRoomSlotUpdates();
+    LeaveMatchQueue();
 
     if (UWorld* World = GetWorld())
     {
@@ -157,6 +162,7 @@ void UMainMenuWidget::NativeDestruct()
             GI->OnRoomJoined.RemoveDynamic(this, &UMainMenuWidget::HandleRoomJoined);
             GI->OnRoomUpdated.RemoveDynamic(this, &UMainMenuWidget::HandleRoomUpdated);
             GI->OnRoomStarted.RemoveDynamic(this, &UMainMenuWidget::HandleRoomStarted);
+            GI->OnMatchQueueStatus.RemoveDynamic(this, &UMainMenuWidget::HandleMatchQueueStatus);
         }
     }
 
@@ -167,11 +173,15 @@ void UMainMenuWidget::OpenMatchMenu()
 {
     StopWaitingRoomSlotUpdates();
     if (MenuSwitcher && MatchMenu) MenuSwitcher->SetActiveWidget(MatchMenu);
+    MatchMenuBaseText = NSLOCTEXT("Match", "Searching", "Searching for Match");
+    SetMatchMenuStatus(MatchMenuBaseText, true);
+    JoinMatchQueue();
 }
 
 void UMainMenuWidget::OpenHostMenu()
 {
     StopWaitingRoomSlotUpdates();
+    LeaveMatchQueue();
     ShowErrorMessage(HostMenuErrorText, FString());
     if (MenuSwitcher && HostMenu) MenuSwitcher->SetActiveWidget(HostMenu);
 }
@@ -179,6 +189,7 @@ void UMainMenuWidget::OpenHostMenu()
 void UMainMenuWidget::OpenJoinMenu()
 {
     StopWaitingRoomSlotUpdates();
+    LeaveMatchQueue();
     ShowErrorMessage(JoinMenuErrorText, FString());
     if (MenuSwitcher && JoinMenu) MenuSwitcher->SetActiveWidget(JoinMenu);
 }
@@ -186,6 +197,7 @@ void UMainMenuWidget::OpenJoinMenu()
 void UMainMenuWidget::OpenMyRecordMenu()
 {
     StopWaitingRoomSlotUpdates();
+    LeaveMatchQueue();
     UpdateMyRecordMenu();
     if (MenuSwitcher && MyRecordMenu) MenuSwitcher->SetActiveWidget(MyRecordMenu);
 }
@@ -193,6 +205,7 @@ void UMainMenuWidget::OpenMyRecordMenu()
 void UMainMenuWidget::OpenMainMenu()
 {
     StopWaitingRoomSlotUpdates();
+    LeaveMatchQueue();
     if (MenuSwitcher && MainMenu) MenuSwitcher->SetActiveWidget(MainMenu);
 }
 
@@ -204,6 +217,7 @@ void UMainMenuWidget::OnWaitingRoomBackClicked()
 
 void UMainMenuWidget::OpenWaitingRoomMenu()
 {
+    LeaveMatchQueue();
     if (MenuSwitcher && WaitingRoomMenu) MenuSwitcher->SetActiveWidget(WaitingRoomMenu);
     ShowErrorMessage(WaitingRoomMenuStatusText, FString());
     StartWaitingRoomSlotUpdates();
@@ -274,11 +288,63 @@ void UMainMenuWidget::JoinMatch()
     ShowErrorMessage(JoinMenuErrorText, TEXT("Failed to contact server"));
 }
 
+void UMainMenuWidget::JoinMatchQueue()
+{
+    if (UWorld* W = GetWorld())
+    {
+        if (UBombTagGameInstance* GI = W->GetGameInstance<UBombTagGameInstance>())
+        {
+            GI->Backend_JoinMatchQueue();
+        }
+    }
+}
+
+void UMainMenuWidget::LeaveMatchQueue()
+{
+    if (UWorld* W = GetWorld())
+    {
+        if (UBombTagGameInstance* GI = W->GetGameInstance<UBombTagGameInstance>())
+        {
+            GI->Backend_LeaveMatchQueue();
+        }
+    }
+
+    bAnimateMatchMenuDots = false;
+}
+
 void UMainMenuWidget::OnHostMenuPasswordCheckBoxChanged(bool bIsChecked)
 {
     if (HostMenuPasswordTextBox)
     {
         HostMenuPasswordTextBox->SetIsEnabled(bIsChecked);
+    }
+}
+
+void UMainMenuWidget::SetMatchMenuStatus(const FText& StatusText, bool bAnimateDots, const FLinearColor& Color)
+{
+    FString Normalized = StatusText.ToString();
+    if (Normalized.IsEmpty())
+    {
+        Normalized = NSLOCTEXT("Match", "Searching", "Searching for Match").ToString();
+    }
+
+    MatchMenuBaseText = FText::FromString(Normalized);
+    bAnimateMatchMenuDots = bAnimateDots;
+
+    if (MatchMenuTextBlock)
+    {
+        MatchMenuTextBlock->SetColorAndOpacity(FSlateColor(Color));
+
+        if (bAnimateMatchMenuDots)
+        {
+            MatchDotCount = 1;
+            const FString Dots = FString::ChrN(MatchDotCount, TEXT('.'));
+            MatchMenuTextBlock->SetText(FText::FromString(Normalized + Dots));
+        }
+        else
+        {
+            MatchMenuTextBlock->SetText(MatchMenuBaseText);
+        }
     }
 }
 
@@ -582,11 +648,24 @@ bool UMainMenuWidget::IsAsciiAlphanumeric(TCHAR Character) const
 
 void UMainMenuWidget::UpdateMatchMenuDots()
 {
+    if (!bAnimateMatchMenuDots)
+    {
+        return;
+    }
+
     MatchDotCount = (MatchDotCount % 3) + 1;
     const FString Dots = FString::ChrN(MatchDotCount, TEXT('.'));
-    const FText Base = NSLOCTEXT("Match", "Searching", "Searching for Match");
+
+    FString BaseString = MatchMenuBaseText.ToString();
+    if (BaseString.IsEmpty())
+    {
+        BaseString = NSLOCTEXT("Match", "Searching", "Searching for Match").ToString();
+    }
+
     if (MatchMenuTextBlock)
-        MatchMenuTextBlock->SetText(FText::FromString(Base.ToString() + Dots));
+    {
+        MatchMenuTextBlock->SetText(FText::FromString(BaseString + Dots));
+    }
 }
 
 void UMainMenuWidget::RequestRoomSummaryRefresh()
@@ -724,6 +803,73 @@ void UMainMenuWidget::HandleRoomClosed(const FString& Reason)
 
     ShowErrorMessage(JoinMenuErrorText, DisplayMessage);
     PendingRoomRequest = ERoomRequestType::None;
+}
+
+void UMainMenuWidget::HandleMatchQueueStatus(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage)
+{
+    if (!MatchMenuTextBlock)
+    {
+        return;
+    }
+
+    if (!bSuccess)
+    {
+        FString CleanError = ErrorMessage;
+        int32 ColonIndex = INDEX_NONE;
+        if (CleanError.FindChar(TEXT(':'), ColonIndex))
+        {
+            CleanError = CleanError.Mid(ColonIndex + 1);
+        }
+        CleanError.TrimStartAndEndInline();
+        if (CleanError.IsEmpty())
+        {
+            CleanError = TEXT("Unknown error");
+        }
+
+        const FText ErrorText = FText::Format(NSLOCTEXT("Match", "QueueError", "Matchmaking failed: {0}"), FText::FromString(CleanError));
+        SetMatchMenuStatus(ErrorText, false, FLinearColor::Red);
+        return;
+    }
+
+    switch (Status.Status)
+    {
+    case EMatchTicketStatus::Queued:
+    {
+        const FText Text = Status.Position > 0
+            ? FText::Format(NSLOCTEXT("Match", "QueueWithPosition", "Waiting for players (Position {0})"), FText::AsNumber(Status.Position))
+            : NSLOCTEXT("Match", "QueueWaiting", "Waiting for players");
+        SetMatchMenuStatus(Text, true);
+        break;
+    }
+    case EMatchTicketStatus::Forming:
+    {
+        const int32 PlayerCount = Status.Players.Num() > 0 ? Status.Players.Num() : FMath::Max(0, Status.MinPlayers);
+        const int32 ReadySeconds = FMath::Max(0, Status.ReadyInSeconds);
+        const FText Text = FText::Format(
+            NSLOCTEXT("Match", "QueueForming", "Match ready with {0} players. Starting in {1}s"),
+            FText::AsNumber(PlayerCount),
+            FText::AsNumber(ReadySeconds)
+        );
+        SetMatchMenuStatus(Text, false);
+        break;
+    }
+    case EMatchTicketStatus::Matched:
+    {
+        const int32 PlayerCount = Status.Players.Num() > 0 ? Status.Players.Num() : FMath::Max(Status.MinPlayers, 3);
+        const FText Text = FText::Format(
+            NSLOCTEXT("Match", "QueueMatched", "Match found! {0} players ready."),
+            FText::AsNumber(PlayerCount)
+        );
+        SetMatchMenuStatus(Text, false, FLinearColor::Green);
+        break;
+    }
+    case EMatchTicketStatus::Cancelled:
+        SetMatchMenuStatus(NSLOCTEXT("Match", "QueueCancelled", "Matchmaking cancelled"), false, FLinearColor::Yellow);
+        break;
+    default:
+        SetMatchMenuStatus(MatchMenuBaseText, true);
+        break;
+    }
 }
 
 #endif

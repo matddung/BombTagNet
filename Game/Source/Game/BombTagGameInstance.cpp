@@ -1,11 +1,15 @@
 #include "BombTagGameInstance.h"
 #include "BombTagSaveGame.h"
+#include "BombTagGameMode.h"
+#include "MenuGameMode.h"
 #include "ApiClient.h"
 #include "AuthService.h"
 #include "RoomService.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "Misc/ConfigCacheIni.h"
 
 namespace
@@ -13,6 +17,48 @@ namespace
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
     const TCHAR* DefaultBackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
+
+    FString BuildGameModeOptionString(const UClass* GameModeClass, bool bListen)
+    {
+        FString GameModeOption;
+
+        if (GameModeClass)
+        {
+            const FString ClassPath = GameModeClass->GetPathName();
+            if (!ClassPath.IsEmpty())
+            {
+                GameModeOption = FString::Printf(TEXT("game=%s"), *ClassPath);
+            }
+        }
+
+        if (bListen)
+        {
+            if (GameModeOption.IsEmpty())
+            {
+                return TEXT("listen");
+            }
+
+            return FString::Printf(TEXT("listen?%s"), *GameModeOption);
+        }
+
+        return GameModeOption;
+    }
+
+    FString AppendGameModeQueryParam(const FString& BaseUrl, const FString& GameModePath)
+    {
+        if (BaseUrl.IsEmpty() || GameModePath.IsEmpty())
+        {
+            return BaseUrl;
+        }
+
+        if (BaseUrl.Contains(TEXT("game=")))
+        {
+            return BaseUrl;
+        }
+
+        const TCHAR Separator = BaseUrl.Contains(TEXT("?")) ? TEXT('&') : TEXT('?');
+        return FString::Printf(TEXT("%s%cgame=%s"), *BaseUrl, Separator, *GameModePath);
+    }
 
     bool IsBackendBaseUrlValid(FString& Url)
     {
@@ -37,7 +83,6 @@ namespace
             return false;
         }
 
-        // Ensure the host isn't empty (e.g. "http:///path")
         if (Url.Mid(HostStartIndex, 1) == TEXT("/"))
         {
             return false;
@@ -81,6 +126,12 @@ void UBombTagGameInstance::Init()
     if (Room && Api)
     {
         Room->Init(Api);
+    }
+
+    Match = NewObject<UMatchService>(this);
+    if (Match && Api)
+    {
+        Match->Init(Api);
     }
 
     LoadOrCreatePlayerData();
@@ -181,11 +232,13 @@ void UBombTagGameInstance::StartHostedMatch()
     {
         if (World->GetNetMode() != NM_Client)
         {
-            UGameplayStatics::OpenLevel(World, MatchMapName, true, TEXT("listen"));
+            const FString Options = BuildGameModeOptionString(ABombTagGameMode::StaticClass(), true);
+            UGameplayStatics::OpenLevel(World, MatchMapName, true, Options);
             return;
         }
 
-        UGameplayStatics::OpenLevel(World, MatchMapName, true);
+        const FString Options = BuildGameModeOptionString(ABombTagGameMode::StaticClass(), false);
+        UGameplayStatics::OpenLevel(World, MatchMapName, true, Options);
     }
 }
 
@@ -355,12 +408,87 @@ void UBombTagGameInstance::Backend_GetRoom()
 
 void UBombTagGameInstance::ResetCurrentSessionState()
 {
+    ResetMatchQueueState();
     CurrentSessionName.Reset();
     CurrentSessionPassword.Reset();
     CurrentMaxPlayers = 4;
     bCurrentIsLan = false;
     CurrentRoomId.Reset();
     bRoomHasStarted = false;
+}
+
+void UBombTagGameInstance::ResetMatchQueueState()
+{
+    StopMatchQueuePolling();
+    CurrentMatchTicketId.Reset();
+    bHasMatchQueueStatus = false;
+    CachedMatchQueueStatus = FMatchQueueStatus();
+    bMatchQueueLaunched = false;
+}
+
+void UBombTagGameInstance::StartMatchQueuePolling()
+{
+    if (UWorld* World = GetWorld())
+    {
+        if (!World->GetTimerManager().IsTimerActive(MatchQueuePollTimerHandle))
+        {
+            World->GetTimerManager().SetTimer(MatchQueuePollTimerHandle, this, &UBombTagGameInstance::Backend_QueryMatchQueueStatus, 1.0f, true, 1.0f);
+        }
+    }
+}
+
+void UBombTagGameInstance::StopMatchQueuePolling()
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(MatchQueuePollTimerHandle);
+    }
+}
+
+void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage)
+{
+    if (!bSuccess)
+    {
+        StopMatchQueuePolling();
+        OnMatchQueueStatus.Broadcast(false, Status, ErrorMessage);
+        return;
+    }
+
+    OnMatchQueueStatus.Broadcast(true, Status, FString());
+
+    if (!Status.TicketId.IsEmpty())
+    {
+        CurrentMatchTicketId = Status.TicketId;
+    }
+
+    CachedMatchQueueStatus = Status;
+    bHasMatchQueueStatus = true;
+
+    if (Status.Status == EMatchTicketStatus::Matched)
+    {
+        StopMatchQueuePolling();
+        CurrentMatchTicketId.Reset();
+        if (!bMatchQueueLaunched)
+        {
+            bMatchQueueLaunched = true;
+            StartHostedMatch();
+        }
+        return;
+    }
+
+    if (Status.Status == EMatchTicketStatus::Cancelled)
+    {
+        StopMatchQueuePolling();
+        ResetMatchQueueState();
+        return;
+    }
+
+    if (Status.Status == EMatchTicketStatus::Unknown)
+    {
+        return;
+    }
+
+    StartMatchQueuePolling();
 }
 
 void UBombTagGameInstance::Backend_StartRoom()
@@ -391,6 +519,66 @@ void UBombTagGameInstance::Backend_StartRoom()
             UE_LOG(LogTemp, Log, TEXT("MatchId=%s"), *MatchId);
             bRoomHasStarted = true;
             OnRoomStarted.Broadcast(true, MatchId);
+        });
+}
+
+void UBombTagGameInstance::Backend_JoinMatchQueue()
+{
+    if (!Match)
+    {
+        OnMatchQueueStatus.Broadcast(false, FMatchQueueStatus(), TEXT("NOT_INITIALIZED"));
+        return;
+    }
+
+    if (bMatchQueueLaunched && CurrentMatchTicketId.IsEmpty())
+    {
+        ResetMatchQueueState();
+    }
+
+    if (!CurrentMatchTicketId.IsEmpty())
+    {
+        Backend_QueryMatchQueueStatus();
+        return;
+    }
+
+    Match->JoinQueue([this](bool bSuccess, const FMatchQueueStatus& Status, const FString& Error)
+        {
+            HandleMatchQueueStatusResult(bSuccess, Status, Error);
+        });
+}
+
+void UBombTagGameInstance::Backend_LeaveMatchQueue()
+{
+    if (!Match)
+    {
+        OnMatchQueueStatus.Broadcast(false, FMatchQueueStatus(), TEXT("NOT_INITIALIZED"));
+        return;
+    }
+
+    if (CurrentMatchTicketId.IsEmpty())
+    {
+        ResetMatchQueueState();
+        return;
+    }
+
+    const FString TicketToCancel = CurrentMatchTicketId;
+    Match->CancelQueue(TicketToCancel, [this](bool bSuccess, const FMatchQueueStatus& Status, const FString& Error)
+        {
+            HandleMatchQueueStatusResult(bSuccess, Status, Error);
+        });
+}
+
+void UBombTagGameInstance::Backend_QueryMatchQueueStatus()
+{
+    if (!Match || CurrentMatchTicketId.IsEmpty())
+    {
+        return;
+    }
+
+    const FString Ticket = CurrentMatchTicketId;
+    Match->GetQueueStatus(Ticket, [this](bool bSuccess, const FMatchQueueStatus& Status, const FString& Error)
+        {
+            HandleMatchQueueStatusResult(bSuccess, Status, Error);
         });
 }
 
@@ -466,7 +654,8 @@ void UBombTagGameInstance::TravelToLobby()
         UE_LOG(LogTemp, Warning, TEXT("LobbyMapName not set"));
         return;
     }
-    UGameplayStatics::OpenLevel(this, LobbyMapName, true, TEXT("listen"));
+    const FString Options = BuildGameModeOptionString(AMenuGameMode::StaticClass(), true);
+    UGameplayStatics::OpenLevel(this, LobbyMapName, true, Options);
 }
 
 void UBombTagGameInstance::ReturnToMenuMap()
@@ -477,11 +666,14 @@ void UBombTagGameInstance::ReturnToMenuMap()
     {
         if (World->GetNetMode() != NM_Client)
         {
-            UGameplayStatics::OpenLevel(World, LobbyMapName, true);
+            const FString Options = BuildGameModeOptionString(AMenuGameMode::StaticClass(), false);
+            UGameplayStatics::OpenLevel(World, LobbyMapName, true, Options);
         }
         else if (APlayerController* PC = GetFirstLocalPlayerController())
         {
-            PC->ClientTravel(MenuReturnURL, TRAVEL_Absolute);
+            const FString MenuGameModePath = AMenuGameMode::StaticClass()->GetPathName();
+            const FString TravelURL = AppendGameModeQueryParam(MenuReturnURL, MenuGameModePath);
+            PC->ClientTravel(TravelURL, TRAVEL_Absolute);
         }
     }
 }
