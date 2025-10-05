@@ -63,6 +63,21 @@ void ABombTagPlayerController::BeginPlay()
 #endif
 }
 
+void ABombTagPlayerController::OnPossess(APawn* InPawn)
+{
+    Super::OnPossess(InPawn);
+
+#if !UE_SERVER
+    if (IsLocalPlayerController())
+    {
+        FInputModeGameOnly InputMode;
+        InputMode.SetConsumeCaptureMouseDown(true);
+        SetInputMode(InputMode);
+        bShowMouseCursor = false;
+    }
+#endif
+}
+
 void ABombTagPlayerController::SetupInputComponent()
 {
     Super::SetupInputComponent();

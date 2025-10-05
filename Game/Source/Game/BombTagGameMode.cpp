@@ -11,13 +11,34 @@
 #include "EngineUtils.h"
 
 #if !UE_SERVER
-#include "UObject/ConstructorHelpers.h"
 #include "ResultEntryWidget.h"
 #endif
 
 ABombTagGameMode::ABombTagGameMode()
 {
     GameStateClass = ABombTagStateBase::StaticClass();
+
+    static ConstructorHelpers::FClassFinder<ABombTagCharacter> PlayerPawnBPClass(TEXT("/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter"));
+    if (PlayerPawnBPClass.Succeeded())
+    {
+        DefaultPawnClass = PlayerPawnBPClass.Class;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to find default pawn class '/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter'. Falling back to ABombTagCharacter."));
+        DefaultPawnClass = ABombTagCharacter::StaticClass();
+    }
+
+    static ConstructorHelpers::FClassFinder<ABombTagPlayerController> PlayerControllerBPClass(TEXT("/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController"));
+    if (PlayerControllerBPClass.Succeeded())
+    {
+        PlayerControllerClass = PlayerControllerBPClass.Class;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to find player controller class '/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController'. Falling back to ABombTagPlayerController."));
+        PlayerControllerClass = ABombTagPlayerController::StaticClass();
+    }
 
 #if !UE_SERVER
     static ConstructorHelpers::FClassFinder<UResultEntryWidget> ResultEntryBPClass(TEXT("/Game/UI/WBP_ResultEntry"));
