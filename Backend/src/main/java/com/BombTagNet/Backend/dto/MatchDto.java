@@ -23,7 +23,10 @@ public class MatchDto {
             Integer minPlayers,
             Integer maxPlayers,
             String matchId,
-            List<Player> players
+            List<Player> players,
+            String hostPlayerId,
+            String hostAddress,
+            Integer hostPort
     ) {
     }
 }

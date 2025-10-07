@@ -17,6 +17,7 @@ namespace
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
     const TCHAR* DefaultBackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
+    constexpr int32 DefaultMatchPort = 7777;
 
     FString BuildGameModeOptionString(const UClass* GameModeClass, bool bListen)
     {
@@ -228,13 +229,46 @@ void UBombTagGameInstance::StartHostedMatch()
         return;
     }
 
+    const FString HostPlayerId = PendingMatchHostPlayerId;
+    const FString HostAddress = PendingMatchHostAddress;
+    const int32 HostPort = PendingMatchHostPort > 0 ? PendingMatchHostPort : DefaultMatchPort;
+
+    PendingMatchHostPlayerId.Reset();
+    PendingMatchHostAddress.Reset();
+    PendingMatchHostPort = 0;
+
+    const bool bShouldHost = HostPlayerId.IsEmpty() || PlayerId.IsEmpty() || PlayerId.Equals(HostPlayerId, ESearchCase::CaseSensitive);
+
     if (UWorld* World = GetWorld())
     {
-        if (World->GetNetMode() != NM_Client)
+        if (bShouldHost || World->GetNetMode() != NM_Client)
         {
             const FString Options = BuildGameModeOptionString(ABombTagGameMode::StaticClass(), true);
+            UE_LOG(LogTemp, Log, TEXT("Starting match as host (listen server)."));
             UGameplayStatics::OpenLevel(World, MatchMapName, true, Options);
             return;
+        }
+
+        if (!HostAddress.IsEmpty())
+        {
+            FString ConnectionString = HostAddress;
+            if (HostPort > 0)
+            {
+                ConnectionString = FString::Printf(TEXT("%s:%d"), *HostAddress, HostPort);
+            }
+
+            if (APlayerController* PC = World->GetFirstPlayerController())
+            {
+                UE_LOG(LogTemp, Log, TEXT("Joining match at %s as client (host=%s)."), *ConnectionString, *HostPlayerId);
+                PC->ClientTravel(ConnectionString, ETravelType::TRAVEL_Absolute);
+                return;
+            }
+
+            UE_LOG(LogTemp, Warning, TEXT("No PlayerController for client travel; loading match map locally."));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Host address missing; loading match map locally."));
         }
 
         const FString Options = BuildGameModeOptionString(ABombTagGameMode::StaticClass(), false);
@@ -401,6 +435,7 @@ void UBombTagGameInstance::Backend_GetRoom()
             if (RoomSummary.Status.Equals(TEXT("STARTED"), ESearchCase::IgnoreCase) && !bRoomHasStarted)
             {
                 bRoomHasStarted = true;
+                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.HostAddress, RoomSummary.HostPort);
                 OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
             }
         });
@@ -424,6 +459,9 @@ void UBombTagGameInstance::ResetMatchQueueState()
     bHasMatchQueueStatus = false;
     CachedMatchQueueStatus = FMatchQueueStatus();
     bMatchQueueLaunched = false;
+    PendingMatchHostPlayerId.Reset();
+    PendingMatchHostAddress.Reset();
+    PendingMatchHostPort = 0;
 }
 
 void UBombTagGameInstance::StartMatchQueuePolling()
@@ -471,6 +509,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
         if (!bMatchQueueLaunched)
         {
             bMatchQueueLaunched = true;
+            PrepareMatchLaunch(Status.HostPlayerId, Status.HostAddress, Status.HostPort);
             StartHostedMatch();
         }
         return;
@@ -491,6 +530,13 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
     StartMatchQueuePolling();
 }
 
+void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort)
+{
+    PendingMatchHostPlayerId = HostPlayer;
+    PendingMatchHostAddress = HostAddress;
+    PendingMatchHostPort = HostPort > 0 ? HostPort : DefaultMatchPort;
+}
+
 void UBombTagGameInstance::Backend_StartRoom()
 {
     if (!Room)
@@ -507,7 +553,7 @@ void UBombTagGameInstance::Backend_StartRoom()
         return;
     }
 
-    Room->StartRoom(CurrentRoomId, [this](bool bSuccess, const FString& MatchId, const FString& Error)
+    Room->StartRoom(CurrentRoomId, [this](bool bSuccess, const FMatchStartInfo& Info, const FString& Error)
         {
             if (!bSuccess)
             {
@@ -516,9 +562,10 @@ void UBombTagGameInstance::Backend_StartRoom()
                 return;
             }
 
-            UE_LOG(LogTemp, Log, TEXT("MatchId=%s"), *MatchId);
+            UE_LOG(LogTemp, Log, TEXT("MatchId=%s host=%s address=%s port=%d"), *Info.MatchId, *Info.HostPlayerId, *Info.HostAddress, Info.HostPort);
             bRoomHasStarted = true;
-            OnRoomStarted.Broadcast(true, MatchId);
+            PrepareMatchLaunch(Info.HostPlayerId, Info.HostAddress, Info.HostPort);
+            OnRoomStarted.Broadcast(true, Info.MatchId);
         });
 }
 

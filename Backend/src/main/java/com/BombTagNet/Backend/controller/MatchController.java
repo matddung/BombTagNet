@@ -6,6 +6,7 @@ import com.BombTagNet.Backend.dto.MatchDto.OkRes;
 import com.BombTagNet.Backend.jwt.JwtAuthFilter.PlayerPrincipal;
 import com.BombTagNet.Backend.service.MatchService;
 import com.BombTagNet.Backend.service.MatchService.MatchQueueStatus;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -69,13 +70,16 @@ public class MatchController {
                 status.minPlayers(),
                 status.maxPlayers(),
                 status.matchId(),
-                status.players()
+                status.players(),
+                status.hostPlayerId(),
+                status.hostAddress(),
+                status.hostPort()
         );
     }
 
     @PostMapping("/queue")
-    public ResponseEntity<MatchQueueStatusRes> enqueue(Authentication auth) {
-        MatchQueueStatus status = match.enqueue(pid(auth), nicknameFromAuth(auth));
+    public ResponseEntity<MatchQueueStatusRes> enqueue(Authentication auth, HttpServletRequest request) {
+        MatchQueueStatus status = match.enqueue(pid(auth), nicknameFromAuth(auth), request == null ? null : request.getRemoteAddr());
         return ResponseEntity.ok(toResponse(status));
     }
 

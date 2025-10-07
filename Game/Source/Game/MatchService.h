@@ -47,6 +47,15 @@ struct GAME_API FMatchQueueStatus
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     TArray<FRoomPlayer> Players;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
+    FString HostPlayerId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
+    FString HostAddress;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
+    int32 HostPort = 0;
 };
 
 UCLASS()

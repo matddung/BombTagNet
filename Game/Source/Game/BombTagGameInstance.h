@@ -121,6 +121,7 @@ private:
     void StartMatchQueuePolling();
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
+    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort);
 
 private:
     UPROPERTY()
@@ -154,6 +155,10 @@ private:
     bool bHasMatchQueueStatus = false;
     FMatchQueueStatus CachedMatchQueueStatus;
     FTimerHandle MatchQueuePollTimerHandle;
+
+    FString PendingMatchHostPlayerId;
+    FString PendingMatchHostAddress;
+    int32 PendingMatchHostPort = 0;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName LobbyMapName = FName(TEXT("/Game/Maps/MenuMap"));

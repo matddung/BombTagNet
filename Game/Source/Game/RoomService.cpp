@@ -261,14 +261,14 @@ void URoomService::GetRoom(const FString& RoomId, TFunction<void(bool bSuccess, 
     ApiClient->Get(Path, MoveTemp(Response));
 }
 
-void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FString& MatchId, const FString& Error)> Callback)
+void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FMatchStartInfo& Info, const FString& Error)> Callback)
 {
     if (!ApiClient)
     {
         UE_LOG(LogTemp, Error, TEXT("StartRoom failed: ApiClient not initialized"));
         if (Callback)
         {
-            Callback(false, FString(), TEXT("NOT_INITIALIZED"));
+            Callback(false, FMatchStartInfo(), TEXT("NOT_INITIALIZED"));
         }
         return;
     }
@@ -282,7 +282,7 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
             {
                 if (Callback)
                 {
-                    Callback(false, FString(), BodyOrError);
+                    Callback(false, FMatchStartInfo(), BodyOrError);
                 }
                 return;
             }
@@ -294,7 +294,7 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
                 UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: StartRoom response"));
                 if (Callback)
                 {
-                    Callback(false, FString(), TEXT("JSON_PARSE_ERROR"));
+                    Callback(false, FMatchStartInfo(), TEXT("JSON_PARSE_ERROR"));
                 }
                 return;
             }
@@ -305,14 +305,26 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
                 UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: Missing matchId in StartRoom response"));
                 if (Callback)
                 {
-                    Callback(false, FString(), TEXT("JSON_PARSE_ERROR"));
+                    Callback(false, FMatchStartInfo(), TEXT("JSON_PARSE_ERROR"));
                 }
                 return;
             }
 
+            FMatchStartInfo Info;
+            Info.MatchId = MatchId;
+            RootObject->TryGetStringField(TEXT("map"), Info.Map);
+            RootObject->TryGetStringField(TEXT("hostPlayerId"), Info.HostPlayerId);
+            RootObject->TryGetStringField(TEXT("hostAddress"), Info.HostAddress);
+
+            double HostPortValue = 0.0;
+            if (RootObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))
+            {
+                Info.HostPort = static_cast<int32>(HostPortValue);
+            }
+
             if (Callback)
             {
-                Callback(true, MatchId, FString());
+                Callback(true, Info, FString());
             }
         });
 
@@ -341,6 +353,15 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
 
     OutSummary.MinPlayers = static_cast<int32>(MinPlayersValue);
     OutSummary.MaxPlayers = static_cast<int32>(MaxPlayersValue);
+
+    JsonObject->TryGetStringField(TEXT("hostId"), OutSummary.HostId);
+    JsonObject->TryGetStringField(TEXT("hostAddress"), OutSummary.HostAddress);
+
+    double HostPortValue = 0.0;
+    if (JsonObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))
+    {
+        OutSummary.HostPort = static_cast<int32>(HostPortValue);
+    }
 
     ParseRoomPlayers(JsonObject, OutSummary.Players);
 

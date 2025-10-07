@@ -33,6 +33,15 @@ struct GAME_API FRoomSummary
     FString Status;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString HostId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString HostAddress;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
+    int32 HostPort = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
     int32 MinPlayers = 2;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
@@ -60,6 +69,27 @@ struct GAME_API FJoinRes
     TArray<FRoomPlayer> Players;
 };
 
+USTRUCT(BlueprintType)
+struct GAME_API FMatchStartInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString MatchId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString Map;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString HostPlayerId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString HostAddress;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    int32 HostPort = 0;
+};
+
 UCLASS()
 class GAME_API URoomService : public UObject
 {
@@ -72,7 +102,7 @@ public:
     void JoinRoom(const FString& RoomId, const FString& Password, TFunction<void(bool bSuccess, const FJoinRes& Result, const FString& Error)> Callback);
     void LeaveRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FString& Error)> Callback);
     void GetRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FRoomSummary& Room, const FString& Error)> Callback);
-    void StartRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FString& MatchId, const FString& Error)> Callback);
+    void StartRoom(const FString& RoomId, TFunction<void(bool bSuccess, const FMatchStartInfo& Info, const FString& Error)> Callback);
 
 private:
     bool ParseRoomSummary(const TSharedPtr<class FJsonObject>& JsonObject, FRoomSummary& OutSummary) const;

@@ -21,7 +21,9 @@ public class MatchService {
         CANCELLED
     }
 
-    public record MatchInfo(String matchId, List<Player> players) {
+    private static final int DEFAULT_GAME_PORT = 7777;
+
+    public record MatchInfo(String matchId, List<Player> players, String hostPlayerId, String hostAddress, int hostPort) {
     }
 
     public record MatchQueueStatus(
@@ -33,7 +35,10 @@ public class MatchService {
             Integer minPlayers,
             Integer maxPlayers,
             String matchId,
-            List<Player> players
+            List<Player> players,
+            String hostPlayerId,
+            String hostAddress,
+            Integer hostPort
     ) {
     }
 
@@ -51,7 +56,7 @@ public class MatchService {
 
     private PendingMatch pendingMatch;
 
-    public MatchQueueStatus enqueue(String playerId, String nickname) {
+    public MatchQueueStatus enqueue(String playerId, String nickname, String address) {
         long now = System.currentTimeMillis();
 
         synchronized (lock) {
@@ -64,7 +69,7 @@ public class MatchService {
                 }
             }
 
-            MatchTicket ticket = new MatchTicket("t_" + ticketSeq.getAndIncrement(), new Player(playerId, nickname));
+            MatchTicket ticket = new MatchTicket("t_" + ticketSeq.getAndIncrement(), new Player(playerId, nickname), address);
             ticketsById.put(ticket.ticketId, ticket);
             ticketsByPlayer.put(playerId, ticket);
 
@@ -204,12 +209,12 @@ public class MatchService {
         }
 
         List<Player> players = match.players();
-        MatchInfo info = new MatchInfo(match.matchId, players);
-        for (MatchTicket ticket : match.tickets) {
-            ticket.status = TicketStatus.MATCHED;
-            ticket.matchInfo = info;
-            ticket.pendingMatch = null;
-        }
+        MatchTicket hostTicket = match.tickets.isEmpty() ? null : match.tickets.get(0);
+        String hostPlayerId = hostTicket == null ? null : hostTicket.player.playerId();
+        String hostAddress = hostTicket == null ? null : hostTicket.address;
+        int hostPort = hostTicket == null || hostTicket.port == null ? DEFAULT_GAME_PORT : hostTicket.port;
+
+        MatchInfo info = new MatchInfo(match.matchId, players, hostPlayerId, hostAddress, hostPort);
 
         pendingMatch = null;
 
@@ -223,6 +228,9 @@ public class MatchService {
         Integer readyIn = null;
         String matchId = null;
         List<Player> players = List.of();
+        String hostPlayerId = null;
+        String hostAddress = null;
+        Integer hostPort = null;
 
         if (ticket.status == TicketStatus.QUEUED) {
             position = queuePosition(ticket);
@@ -237,6 +245,9 @@ public class MatchService {
             if (ticket.matchInfo != null) {
                 matchId = ticket.matchInfo.matchId();
                 players = ticket.matchInfo.players();
+                hostPlayerId = ticket.matchInfo.hostPlayerId();
+                hostAddress = ticket.matchInfo.hostAddress();
+                hostPort = ticket.matchInfo.hostPort();
             }
         }
 
@@ -249,7 +260,10 @@ public class MatchService {
                 MIN_PLAYERS,
                 MAX_PLAYERS,
                 matchId,
-                List.copyOf(players)
+                List.copyOf(players),
+                hostPlayerId,
+                hostAddress,
+                hostPort
         );
     }
 
@@ -285,10 +299,14 @@ public class MatchService {
         private TicketStatus status = TicketStatus.QUEUED;
         private PendingMatch pendingMatch;
         private MatchInfo matchInfo;
+        private final String address;
+        private final Integer port;
 
-        private MatchTicket(String ticketId, Player player) {
+        private MatchTicket(String ticketId, Player player, String address) {
             this.ticketId = ticketId;
             this.player = player;
+            this.address = (address == null || address.isBlank()) ? null : address;
+            this.port = DEFAULT_GAME_PORT;
         }
     }
 

@@ -255,6 +255,15 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
         }
     }
 
+    JsonObject->TryGetStringField(TEXT("hostPlayerId"), OutStatus.HostPlayerId);
+    JsonObject->TryGetStringField(TEXT("hostAddress"), OutStatus.HostAddress);
+
+    double HostPortValue = 0.0;
+    if (JsonObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))
+    {
+        OutStatus.HostPort = static_cast<int32>(HostPortValue);
+    }
+
     return true;
 }
 

@@ -13,6 +13,8 @@ public class Room {
     private final int maxPlayers;
     private final String password;
     private volatile RoomStatus status = RoomStatus.WAITING;
+    private volatile String hostAddress;
+    private volatile int hostPort = 7777;
 
     private final Map<String, Player> players = new ConcurrentHashMap<>();
 
@@ -35,6 +37,23 @@ public class Room {
     public void assignHost(String hostId) {
         if (hostId != null && !hostId.isBlank()) {
             this.hostId = hostId;
+        }
+    }
+
+    public String hostAddress() {
+        return hostAddress;
+    }
+
+    public int hostPort() {
+        return hostPort;
+    }
+
+    public void updateHostEndpoint(String address, int port) {
+        if (address != null && !address.isBlank()) {
+            this.hostAddress = address;
+        }
+        if (port > 0) {
+            this.hostPort = port;
         }
     }
 

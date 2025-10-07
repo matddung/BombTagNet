@@ -5,6 +5,7 @@ import com.BombTagNet.Backend.dao.Room;
 import com.BombTagNet.Backend.dto.RoomDto.*;
 import com.BombTagNet.Backend.jwt.JwtAuthFilter.PlayerPrincipal;
 import com.BombTagNet.Backend.service.RoomService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -59,12 +60,14 @@ public class RoomController {
     }
 
     @PostMapping
-    public ResponseEntity<RoomSummary> create(Authentication auth, @RequestBody CreateRoomReq req) {
-        Room r = rooms.create(pid(auth), req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password());
+    public ResponseEntity<RoomSummary> create(Authentication auth, HttpServletRequest request, @RequestBody CreateRoomReq req) {
+        Room r = rooms.create(pid(auth), req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password(),
+                request == null ? null : request.getRemoteAddr());
         Player host = new Player(pid(auth), nicknameFromAuth(auth));
         r.add(host);
         List<Player> players = List.copyOf(r.players());
-        return ResponseEntity.ok(new RoomSummary(r.roomId(), r.name(), r.hostId(), r.status(), 2, r.maxPlayers(), r.size(), players));
+        return ResponseEntity.ok(new RoomSummary(r.roomId(), r.name(), r.hostId(), r.status(), 2, r.maxPlayers(), r.size(), players,
+                r.hostAddress(), r.hostPort()));
     }
 
     @PostMapping("/{roomId}/join")
@@ -86,14 +89,25 @@ public class RoomController {
     @GetMapping("/{roomId}")
     public ResponseEntity<RoomDetail> get(Authentication auth, @PathVariable String roomId) {
         Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
-        return ResponseEntity.ok(new RoomDetail(r.roomId(), r.name(), r.status(), 2, r.maxPlayers(), r.size(), List.copyOf(r.players())));
+        return ResponseEntity.ok(new RoomDetail(r.roomId(), r.name(), r.status(), 2, r.maxPlayers(), r.size(), List.copyOf(r.players()),
+                r.hostId(), r.hostAddress(), r.hostPort()));
     }
 
     @PostMapping("/{roomId}/start")
-    public ResponseEntity<?> start(Authentication auth, @PathVariable String roomId) {
+    public ResponseEntity<?> start(Authentication auth, HttpServletRequest request, @PathVariable String roomId) {
         Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
         rooms.start(r, pid(auth), 2);
-        return ResponseEntity.ok().body(java.util.Map.of("matchId", "m_" + System.currentTimeMillis(), "map", "MainMap", "seed", 123456));
+        if (request != null) {
+            r.updateHostEndpoint(request.getRemoteAddr(), r.hostPort());
+        }
+        return ResponseEntity.ok().body(java.util.Map.of(
+                "matchId", "m_" + System.currentTimeMillis(),
+                "map", "MainMap",
+                "seed", 123456,
+                "hostPlayerId", r.hostId(),
+                "hostAddress", r.hostAddress(),
+                "hostPort", r.hostPort()
+        ));
     }
 
     @ExceptionHandler(IllegalStateException.class)
