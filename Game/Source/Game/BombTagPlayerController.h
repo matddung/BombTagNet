@@ -29,16 +29,18 @@ public:
     void ClientShowResultScreen(TSubclassOf<UResultEntryWidget> ResultWidgetClass, bool bWinner);
 	
 protected:
-	virtual void BeginPlay() override;
+    virtual void BeginPlay() override;
     virtual void OnPossess(APawn* InPawn) override;
-	virtual void SetupInputComponent() override;
-	virtual void Tick(float DeltaSeconds) override;
+    virtual void OnRep_Pawn() override;
+    virtual void SetupInputComponent() override;
+    virtual void Tick(float DeltaSeconds) override;
 
-	UFUNCTION(Server, Reliable)
-	void ServerSetPlayerNickname(const FString& Nickname);
+    UFUNCTION(Server, Reliable)
+    void ServerSetPlayerNickname(const FString& Nickname);
 
-	void ShowMainMenuInternal(TSubclassOf<UUserWidget> InMenuClass);
-	bool CanDisplayPlayerUI() const;
+    void ShowMainMenuInternal(TSubclassOf<UUserWidget> InMenuClass);
+    bool CanDisplayPlayerUI() const;
+    void ApplyDefaultGameInputMode();
 
 protected:
     UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")

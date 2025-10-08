@@ -216,6 +216,13 @@ public class MatchService {
 
         MatchInfo info = new MatchInfo(match.matchId, players, hostPlayerId, hostAddress, hostPort);
 
+        for (MatchTicket ticket : match.tickets) {
+            ticket.pendingMatch = null;
+            ticket.matchInfo = info;
+            ticket.status = TicketStatus.MATCHED;
+        }
+
+        match.tickets.clear();
         pendingMatch = null;
 
         if (queue.size() >= MIN_PLAYERS) {

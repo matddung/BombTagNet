@@ -68,13 +68,16 @@ void ABombTagPlayerController::OnPossess(APawn* InPawn)
     Super::OnPossess(InPawn);
 
 #if !UE_SERVER
-    if (IsLocalPlayerController())
-    {
-        FInputModeGameOnly InputMode;
-        InputMode.SetConsumeCaptureMouseDown(true);
-        SetInputMode(InputMode);
-        bShowMouseCursor = false;
-    }
+    ApplyDefaultGameInputMode();
+#endif
+}
+
+void ABombTagPlayerController::OnRep_Pawn()
+{
+    Super::OnRep_Pawn();
+
+#if !UE_SERVER
+    ApplyDefaultGameInputMode();
 #endif
 }
 
@@ -241,5 +244,20 @@ bool ABombTagPlayerController::CanDisplayPlayerUI() const
 {
 #if !UE_SERVER
     return IsLocalPlayerController() || GetNetMode() == NM_Client;
+#endif
+}
+
+void ABombTagPlayerController::ApplyDefaultGameInputMode()
+{
+#if !UE_SERVER
+    if (!IsLocalPlayerController())
+    {
+        return;
+    }
+
+    FInputModeGameOnly InputMode;
+    InputMode.SetConsumeCaptureMouseDown(true);
+    SetInputMode(InputMode);
+    bShowMouseCursor = false;
 #endif
 }
