@@ -151,6 +151,8 @@ void ABombTagCharacter::SetHasBomb_Server(bool bNewHasBomb)
 	if (bHasBomb == bNewHasBomb) return;
 	bHasBomb = bNewHasBomb;
 
+	OnRep_HasBomb();
+
 	ForceNetUpdate();
 }
 
