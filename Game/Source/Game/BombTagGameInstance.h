@@ -27,6 +27,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomUpdated, const FRoomSummary&,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomStarted, bool, bSuccess, const FString&, Info);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomClosed, const FString&, Reason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchQueueStatus, bool, bSuccess, const FMatchQueueStatus&, Status, const FString&, ErrorMessage);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnPlayerRecordUpdated, int32, Win, int32, Lose, int32, TotalMatches);
 
 UCLASS()
 class GAME_API UBombTagGameInstance : public UGameInstance
@@ -53,6 +54,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Player Profile")
     void ResetPlayerRecord();
+
+    UPROPERTY(BlueprintAssignable, Category = "Player Profile")
+    FOnPlayerRecordUpdated OnPlayerRecordUpdated;
 
     FOnWaitingRoomJoinSucceeded& OnWaitingRoomJoinSucceeded() { return WaitingRoomJoinSucceededDelegate; }
 
@@ -125,6 +129,7 @@ private:
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
     void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort);
+    void BroadcastPlayerRecord();
 
 private:
     UPROPERTY()

@@ -24,6 +24,9 @@ public:
     UPROPERTY(meta = (BindWidget))
     UTextBlock* FourthIDText;
 
+    UPROPERTY(meta = (BindWidgetOptional))
+    UTextBlock* PlayerRecordText;
+
 protected:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;
@@ -32,5 +35,11 @@ protected:
     virtual FReply NativeOnTouchStarted(const FGeometry& InGeometry, const FPointerEvent& InTouchEvent) override;
 
 private:
+    UFUNCTION()
+    void HandlePlayerRecordUpdated(int32 Win, int32 Lose, int32 TotalMatches);
+
+    void UpdatePlayerRecordText(int32 Win, int32 Lose, int32 TotalMatches);
     void GoToMenu();
+
+    TWeakObjectPtr<class UBombTagGameInstance> CachedGameInstance;
 };

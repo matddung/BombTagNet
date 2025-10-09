@@ -98,11 +98,10 @@ void ABombTagGameMode::OnGameTimerExpired()
                 const bool bWinner = WinningControllers.Contains(PC);
 
                 PC->ClientMessage(bWinner ? TEXT("WIN") : TEXT("Lose"));
-
-                PC->ClientShowResultScreen(ResultEntryWidgetClass, bWinner);
             }
         }
 
+        BeginMatchResultSubmission(WinningControllers);
         return;
     }
 
@@ -214,4 +213,156 @@ void ABombTagGameMode::HandleStartCountdown()
 
     GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
     StartNewRound();
+}
+
+void ABombTagGameMode::BeginMatchResultSubmission(const TSet<APlayerController*>& WinningControllers)
+{
+    PendingMatchResultSnapshot = BuildMatchResultSnapshot(WinningControllers);
+    PendingMatchResultHash = PendingMatchResultSnapshot.BuildCanonicalSignature();
+    PendingMatchResultVotes.Reset();
+    PendingMatchParticipants.Reset();
+    RespondedMatchParticipants.Reset();
+
+    bAwaitingMatchResult = true;
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (ABombTagPlayerController* PC = Cast<ABombTagPlayerController>(It->Get()))
+        {
+            PendingMatchParticipants.Add(PC);
+            PC->ClientRequestMatchResultSubmission(PendingMatchResultSnapshot);
+        }
+    }
+
+    if (PendingMatchParticipants.Num() == 0)
+    {
+        FinalizeMatchResult(PendingMatchResultSnapshot);
+    }
+}
+
+FBombTagMatchResultSnapshot ABombTagGameMode::BuildMatchResultSnapshot(const TSet<APlayerController*>& WinningControllers) const
+{
+    FBombTagMatchResultSnapshot Snapshot;
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (ABombTagPlayerController* PC = Cast<ABombTagPlayerController>(It->Get()))
+        {
+            FBombTagPlayerMatchResult Entry;
+
+            if (APlayerState* PlayerState = PC->PlayerState)
+            {
+                Entry.PlayerName = PlayerState->GetPlayerName();
+            }
+            else
+            {
+                Entry.PlayerName = PC->GetName();
+            }
+
+            Entry.bIsWinner = WinningControllers.Contains(PC);
+            Snapshot.PlayerResults.Add(Entry);
+        }
+    }
+
+    return Snapshot;
+}
+
+void ABombTagGameMode::RegisterMatchResultSubmission(ABombTagPlayerController* PlayerController, const FString& ResultHash, bool bClientAccepted)
+{
+    if (!bAwaitingMatchResult || !PlayerController)
+    {
+        return;
+    }
+
+    if (!PendingMatchParticipants.Contains(PlayerController))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Received match result submission from unexpected controller %s"), *GetNameSafe(PlayerController));
+        return;
+    }
+
+    if (RespondedMatchParticipants.Contains(PlayerController))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("Ignoring duplicate match result submission from %s"), *GetNameSafe(PlayerController));
+        return;
+    }
+
+    RespondedMatchParticipants.Add(PlayerController);
+
+    if (bClientAccepted)
+    {
+        int32& VoteCount = PendingMatchResultVotes.FindOrAdd(ResultHash);
+        ++VoteCount;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Controller %s rejected the proposed match result"), *GetNameSafe(PlayerController));
+    }
+
+    EvaluateMatchResultSubmissions();
+}
+
+void ABombTagGameMode::EvaluateMatchResultSubmissions()
+{
+    if (!bAwaitingMatchResult)
+    {
+        return;
+    }
+
+    const int32 ParticipantCount = PendingMatchParticipants.Num();
+    if (ParticipantCount <= 0)
+    {
+        FinalizeMatchResult(PendingMatchResultSnapshot);
+        return;
+    }
+
+    const int32 Quorum = (ParticipantCount / 2) + 1;
+
+    if (const int32* VoteCount = PendingMatchResultVotes.Find(PendingMatchResultHash))
+    {
+        if (*VoteCount >= Quorum)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Match result quorum reached with %d/%d confirmations."), *VoteCount, ParticipantCount);
+            FinalizeMatchResult(PendingMatchResultSnapshot);
+            return;
+        }
+    }
+
+    if (RespondedMatchParticipants.Num() >= ParticipantCount)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Match result quorum not reached (%d/%d). Using server authoritative snapshot."),
+            PendingMatchResultVotes.FindRef(PendingMatchResultHash), ParticipantCount);
+        FinalizeMatchResult(PendingMatchResultSnapshot);
+    }
+}
+
+void ABombTagGameMode::FinalizeMatchResult(const FBombTagMatchResultSnapshot& Snapshot)
+{
+    if (!bAwaitingMatchResult)
+    {
+        return;
+    }
+
+    bAwaitingMatchResult = false;
+
+    PendingMatchResultVotes.Reset();
+    PendingMatchParticipants.Reset();
+    RespondedMatchParticipants.Reset();
+    PendingMatchResultHash.Reset();
+    PendingMatchResultSnapshot = Snapshot;
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (ABombTagPlayerController* PC = Cast<ABombTagPlayerController>(It->Get()))
+        {
+            FString PlayerName;
+            if (APlayerState* PlayerState = PC->PlayerState)
+            {
+                PlayerName = PlayerState->GetPlayerName();
+            }
+
+            const bool bWinner = Snapshot.IsPlayerWinner(PlayerName);
+            PC->ClientFinalizeMatchResult(Snapshot, bWinner);
+            PC->ClientShowResultScreen(ResultEntryWidgetClass, bWinner);
+        }
+    }
 }

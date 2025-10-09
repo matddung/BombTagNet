@@ -137,6 +137,7 @@ void UBombTagGameInstance::Init()
 
     LoadOrCreatePlayerData();
     PlayerNickname = GetPlayerNickname();
+    BroadcastPlayerRecord();
     UE_LOG(LogTemp, Log, TEXT("BombTag GameInstance initialized"));
 }
 
@@ -201,6 +202,7 @@ void UBombTagGameInstance::RecordMatchResult(EBombTagMatchResult MatchResult)
     }
 
     SavePlayerData();
+    BroadcastPlayerRecord();
 }
 
 void UBombTagGameInstance::GetPlayerRecord(int32& OutWin, int32& OutLose, int32& OutTotalMatches) const
@@ -224,6 +226,7 @@ void UBombTagGameInstance::ResetPlayerRecord()
     PlayerSaveGame->Win = 0;
     PlayerSaveGame->Lose = 0;
     SavePlayerData();
+    BroadcastPlayerRecord();
 }
 
 
@@ -687,6 +690,18 @@ void UBombTagGameInstance::SavePlayerData()
     {
         UGameplayStatics::SaveGameToSlot(PlayerSaveGame, PlayerSaveSlotName, PlayerSaveSlotIndex);
     }
+}
+
+void UBombTagGameInstance::BroadcastPlayerRecord()
+{
+    if (!PlayerSaveGame)
+    {
+        return;
+    }
+
+    const int32 WinCount = PlayerSaveGame->Win;
+    const int32 LoseCount = PlayerSaveGame->Lose;
+    OnPlayerRecordUpdated.Broadcast(WinCount, LoseCount, WinCount + LoseCount);
 }
 
 void UBombTagGameInstance::EnsureNicknameIsValid()

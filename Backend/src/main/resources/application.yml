@@ -13,19 +13,6 @@ app:
     expiresSeconds: 3600
 
 spring:
-  datasource:
-    url: jdbc:mariadb://localhost:3306/bombtagnet?useSSL=false&allowPublicKeyRetrieval=true
-    username: studyjun
-    password: 1234
-    driver-class-name: org.mariadb.jdbc.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MariaDBDialect
-        format_sql: true
-    show-sql: true
   jackson:
     serialization:
       WRITE_DATES_AS_TIMESTAMPS: false

@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "MatchResultTypes.h"
 #include "BombTagGameMode.generated.h"
 
 class UResultEntryWidget;
+class ABombTagPlayerController;
 
 UCLASS()
 class GAME_API ABombTagGameMode : public AGameModeBase
@@ -25,9 +27,16 @@ protected:
     void RespawnPlayers();
     void BeginStartCountdown();
 
+    void BeginMatchResultSubmission(const TSet<APlayerController*>& WinningControllers);
+    FBombTagMatchResultSnapshot BuildMatchResultSnapshot(const TSet<APlayerController*>& WinningControllers) const;
+    void EvaluateMatchResultSubmissions();
+    void FinalizeMatchResult(const FBombTagMatchResultSnapshot& Snapshot);
+
 public:
     UFUNCTION(BlueprintPure, Category = "Game")
     float GetRemainingGameTime() const;
+
+    void RegisterMatchResultSubmission(ABombTagPlayerController* PlayerController, const FString& ResultHash, bool bClientAccepted);
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "Game")
@@ -43,4 +52,11 @@ protected:
     FTimerHandle CountdownTimerHandle;
 
     int32 CountdownTime = 0;
+
+    bool bAwaitingMatchResult = false;
+    FBombTagMatchResultSnapshot PendingMatchResultSnapshot;
+    FString PendingMatchResultHash;
+    TMap<FString, int32> PendingMatchResultVotes;
+    TSet<TWeakObjectPtr<ABombTagPlayerController>> PendingMatchParticipants;
+    TSet<TWeakObjectPtr<ABombTagPlayerController>> RespondedMatchParticipants;
 };

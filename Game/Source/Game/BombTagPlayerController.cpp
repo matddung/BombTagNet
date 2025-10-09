@@ -3,6 +3,7 @@
 #include "BombTagGameInstance.h"
 #include "BombTagStateBase.h"
 #include "ResultEntryWidget.h"
+#include "BombTagGameMode.h"
 
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
@@ -199,6 +200,7 @@ void ABombTagPlayerController::ClientShowResultScreen_Implementation(TSubclassOf
 {
 #if !UE_SERVER
     if (!IsLocalPlayerController()) return;
+
     if (ResultWidgetClass)
     {
         if (UResultEntryWidget* ResultWidget = CreateWidget<UResultEntryWidget>(this, ResultWidgetClass))
@@ -206,6 +208,96 @@ void ABombTagPlayerController::ClientShowResultScreen_Implementation(TSubclassOf
             ResultWidget->AddToPlayerScreen();
         }
     }
+#endif
+}
+
+void ABombTagPlayerController::ClientRequestMatchResultSubmission_Implementation(const FBombTagMatchResultSnapshot& Snapshot)
+{
+#if !UE_SERVER
+    if (!IsLocalPlayerController())
+    {
+        return;
+    }
+
+    const bool bIsValid = ValidateMatchSnapshot(Snapshot);
+    const FString ResultHash = Snapshot.BuildCanonicalSignature();
+
+    ServerSubmitMatchResultHash(ResultHash, bIsValid);
+
+    if (!bIsValid)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Client %s rejected match snapshot and reported hash %s"), *GetName(), *ResultHash);
+    }
+#endif
+}
+
+void ABombTagPlayerController::ServerSubmitMatchResultHash_Implementation(const FString& ResultHash, bool bClientAccepted)
+{
+    if (ABombTagGameMode* GameMode = GetWorld()->GetAuthGameMode<ABombTagGameMode>())
+    {
+        GameMode->RegisterMatchResultSubmission(this, ResultHash, bClientAccepted);
+    }
+}
+
+void ABombTagPlayerController::ClientFinalizeMatchResult_Implementation(const FBombTagMatchResultSnapshot& FinalSnapshot, bool bIsWinner)
+{
+#if !UE_SERVER
+    if (!IsLocalPlayerController())
+    {
+        return;
+    }
+
+    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
+    {
+        const EBombTagMatchResult MatchResult = bIsWinner ? EBombTagMatchResult::Win : EBombTagMatchResult::Lose;
+        GameInstance->RecordMatchResult(MatchResult);
+    }
+#endif
+}
+
+bool ABombTagPlayerController::ValidateMatchSnapshot(const FBombTagMatchResultSnapshot& Snapshot) const
+{
+#if !UE_SERVER
+    if (Snapshot.IsEmpty())
+    {
+        return false;
+    }
+
+    const UWorld* World = GetWorld();
+    if (!World)
+    {
+        return false;
+    }
+
+    const AGameStateBase* GameState = World->GetGameState<AGameStateBase>();
+    if (!GameState)
+    {
+        return false;
+    }
+
+    TSet<FString> KnownPlayers;
+    for (APlayerState* PlayerStates : GameState->PlayerArray)
+    {
+        if (!PlayerStates)
+        {
+            continue;
+        }
+
+        KnownPlayers.Add(PlayerStates->GetPlayerName());
+    }
+
+    for (const FBombTagPlayerMatchResult& Entry : Snapshot.PlayerResults)
+    {
+        if (!KnownPlayers.Contains(Entry.PlayerName))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Unknown player '%s' in submitted match snapshot"), *Entry.PlayerName);
+            return false;
+        }
+    }
+
+    return true;
+#else
+    return false;
 #endif
 }
 

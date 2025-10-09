@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "MatchResultTypes.h"
 #include "BombTagPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -27,6 +28,15 @@ public:
 
     UFUNCTION(Client, Reliable)
     void ClientShowResultScreen(TSubclassOf<UResultEntryWidget> ResultWidgetClass, bool bWinner);
+
+    UFUNCTION(Client, Reliable)
+    void ClientRequestMatchResultSubmission(const FBombTagMatchResultSnapshot& Snapshot);
+
+    UFUNCTION(Server, Reliable)
+    void ServerSubmitMatchResultHash(const FString& ResultHash, bool bClientAccepted);
+
+    UFUNCTION(Client, Reliable)
+    void ClientFinalizeMatchResult(const FBombTagMatchResultSnapshot& FinalSnapshot, bool bIsWinner);
 	
 protected:
     virtual void BeginPlay() override;
@@ -76,4 +86,7 @@ protected:
     float BorderFlashElapsed = 0.f;
     bool bBorderFlashEnabled = true;
     bool bWantsHUDWidget = false;
+
+private:
+    bool ValidateMatchSnapshot(const FBombTagMatchResultSnapshot& Snapshot) const;
 };

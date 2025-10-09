@@ -1,6 +1,7 @@
 #include "ResultEntryWidget.h"
 #include "BombTagPlayerController.h"
 #include "MenuGameMode.h"
+#include "BombTagGameInstance.h"
 
 #include "Components/TextBlock.h"
 #include "GameFramework/GameStateBase.h"
@@ -54,10 +55,28 @@ void UResultEntryWidget::NativeConstruct()
             if (PlayerStates.Num() > 3) SetTextIfValid(FourthIDText, PlayerStates[3]->GetPlayerName());
         }
     }
+
+    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
+    {
+        CachedGameInstance = GameInstance;
+        GameInstance->OnPlayerRecordUpdated.AddDynamic(this, &UResultEntryWidget::HandlePlayerRecordUpdated);
+
+        int32 Win = 0;
+        int32 Lose = 0;
+        int32 Total = 0;
+        GameInstance->GetPlayerRecord(Win, Lose, Total);
+        UpdatePlayerRecordText(Win, Lose, Total);
+    }
 }
 
 void UResultEntryWidget::NativeDestruct()
 {
+    if (CachedGameInstance.IsValid())
+    {
+        CachedGameInstance->OnPlayerRecordUpdated.RemoveDynamic(this, &UResultEntryWidget::HandlePlayerRecordUpdated);
+        CachedGameInstance = nullptr;
+    }
+
     if (APlayerController* PC = GetOwningPlayer())
     {
         FInputModeGameOnly InputMode;
@@ -107,6 +126,22 @@ void UResultEntryWidget::GoToMenu()
             : FString::Printf(TEXT("game=%s"), *GameModePath);
         UGameplayStatics::OpenLevel(World, FName(TEXT("/Game/Maps/MenuMap")), true, Options);
     }
+}
+
+void UResultEntryWidget::HandlePlayerRecordUpdated(int32 Win, int32 Lose, int32 TotalMatches)
+{
+    UpdatePlayerRecordText(Win, Lose, TotalMatches);
+}
+
+void UResultEntryWidget::UpdatePlayerRecordText(int32 Win, int32 Lose, int32 TotalMatches)
+{
+    if (!PlayerRecordText)
+    {
+        return;
+    }
+
+    const FText RecordText = FText::FromString(FString::Printf(TEXT("Win : %d Loss : %d (Total : %d)"), Win, Lose, TotalMatches));
+    PlayerRecordText->SetText(RecordText);
 }
 
 #endif
