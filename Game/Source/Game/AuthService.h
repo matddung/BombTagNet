@@ -7,7 +7,7 @@
 class UApiClient;
 
 USTRUCT(BlueprintType)
-struct GAME_API FGuestLoginRes
+struct GAME_API FBackendLoginRes
 {
     GENERATED_BODY()
 
@@ -32,7 +32,7 @@ class GAME_API UAuthService : public UObject
 public:
     void Init(UApiClient* InApi);
 
-    void GuestLogin(const FString& Nickname, TFunction<void(bool bSuccess, const FGuestLoginRes& Response, const FString& Error)> Callback);
+    void Login(const FString& Nickname, TFunction<void(bool bSuccess, const FBackendLoginRes& Response, const FString& Error)> Callback);
 
 private:
     UPROPERTY()

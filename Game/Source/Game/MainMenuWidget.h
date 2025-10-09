@@ -295,7 +295,7 @@ private:
     };
 
     ERoomRequestType PendingRoomRequest = ERoomRequestType::None;
-    bool bGuestLoginRequested = false;
+    bool bLoginRequested = false;
     bool bIsWaitingRoomVisible = false;
 
     FRoomSummary CachedRoomSummary;

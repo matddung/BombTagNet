@@ -158,11 +158,32 @@ void UBombTagGameInstance::SetPlayerNickname(const FString& NewNickname)
         PlayerSaveGame->Nickname = Name;
         SavePlayerData();
     }
+
+    PlayerNickname = Name;
 }
 
 FString UBombTagGameInstance::GetPlayerNickname() const
 {
-    return PlayerSaveGame ? PlayerSaveGame->Nickname : TEXT("Guest");
+    if (!PlayerSaveGame)
+    {
+        return FString();
+    }
+
+    FString Name = PlayerSaveGame->Nickname;
+    Name.TrimStartAndEndInline();
+    return Name;
+}
+
+bool UBombTagGameInstance::HasPlayerNickname() const
+{
+    if (!PlayerSaveGame)
+    {
+        return false;
+    }
+
+    FString Name = PlayerSaveGame->Nickname;
+    Name.TrimStartAndEndInline();
+    return !Name.IsEmpty();
 }
 
 void UBombTagGameInstance::RecordMatchResult(EBombTagMatchResult MatchResult)
@@ -295,22 +316,30 @@ void UBombTagGameInstance::LeaveSession()
     ResetCurrentSessionState();
 }
 
-void UBombTagGameInstance::Backend_GuestLogin(const FString& InNickname)
+void UBombTagGameInstance::Backend_Login(const FString& InNickname)
 {
     if (!Auth)
     {
-        UE_LOG(LogTemp, Error, TEXT("Backend_GuestLogin failed: Auth service not ready"));
+        UE_LOG(LogTemp, Error, TEXT("Backend_Login failed: Auth service not ready"));
         OnBackendLogin.Broadcast(false, TEXT("NOT_INITIALIZED"));
         return;
     }
 
-    const FString NickToUse = InNickname.IsEmpty() ? GetPlayerNickname() : InNickname;
+    FString NickToUse = InNickname;
+    NickToUse.TrimStartAndEndInline();
 
-    Auth->GuestLogin(NickToUse, [this](bool bSuccess, const FGuestLoginRes& Response, const FString& Error)
+    if (NickToUse.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Backend_Login failed: nickname required"));
+        OnBackendLogin.Broadcast(false, TEXT("NICKNAME_REQUIRED"));
+        return;
+    }
+
+    Auth->Login(NickToUse, [this](bool bSuccess, const FBackendLoginRes& Response, const FString& Error)
         {
             if (!bSuccess)
             {
-                UE_LOG(LogTemp, Error, TEXT("Guest login failed: %s"), *Error);
+                UE_LOG(LogTemp, Error, TEXT("Backend login failed: %s"), *Error);
                 OnBackendLogin.Broadcast(false, Error);
                 return;
             }
@@ -323,6 +352,8 @@ void UBombTagGameInstance::Backend_GuestLogin(const FString& InNickname)
             {
                 Api->SetAuthToken(FString::Printf(TEXT("Bearer %s"), *AccessToken));
             }
+
+            PlayerNickname.TrimStartAndEndInline();
 
             UE_LOG(LogTemp, Log, TEXT("Logged in as %s (%s)"), *PlayerNickname, *PlayerId);
             OnBackendLogin.Broadcast(true, FString());
@@ -643,10 +674,6 @@ void UBombTagGameInstance::LoadOrCreatePlayerData()
         PlayerSaveGame = Cast<UBombTagSaveGame>(UGameplayStatics::CreateSaveGameObject(UBombTagSaveGame::StaticClass()));
         if (PlayerSaveGame)
         {
-            if (PlayerSaveGame->Nickname.IsEmpty())
-            {
-                PlayerSaveGame->Nickname = TEXT("Guest");
-            }
             SavePlayerData();
         }
     }
@@ -670,8 +697,13 @@ void UBombTagGameInstance::EnsureNicknameIsValid()
     Name.TrimStartAndEndInline();
     if (!Name.IsEmpty() && !IsValidNickname(Name))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Loaded invalid nickname '%s' - reset to Guest"), *Name);
-        PlayerSaveGame->Nickname = TEXT("Guest");
+        UE_LOG(LogTemp, Warning, TEXT("Loaded invalid nickname '%s' - clearing saved nickname"), *Name);
+        PlayerSaveGame->Nickname.Empty();
+        SavePlayerData();
+    }
+    else if (PlayerSaveGame->Nickname != Name)
+    {
+        PlayerSaveGame->Nickname = Name;
         SavePlayerData();
     }
 }

@@ -186,7 +186,11 @@ void ABombTagPlayerController::ServerSetPlayerNickname_Implementation(const FStr
     {
         FString NicknameToApply = Nickname;
         NicknameToApply.TrimStartAndEndInline();
-        if (NicknameToApply.IsEmpty()) NicknameToApply = TEXT("Guest");
+        if (NicknameToApply.IsEmpty())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("ServerSetPlayerNickname called with empty nickname; ignoring."));
+            return;
+        }
         PlayerState->SetPlayerName(NicknameToApply);
     }
 }

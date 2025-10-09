@@ -117,10 +117,10 @@ void UMainMenuWidget::NativeConstruct()
             GI->OnRoomClosed.AddDynamic(this, &UMainMenuWidget::HandleRoomClosed);
             GI->OnMatchQueueStatus.AddDynamic(this, &UMainMenuWidget::HandleMatchQueueStatus);
 
-            if (!bGuestLoginRequested)
+            if (!bLoginRequested && GI->HasPlayerNickname())
             {
-                GI->Backend_GuestLogin(GI->GetPlayerNickname());
-                bGuestLoginRequested = true;
+                GI->Backend_Login(GI->GetPlayerNickname());
+                bLoginRequested = true;
             }
         }
     }
@@ -133,9 +133,7 @@ void UMainMenuWidget::NativeConstruct()
     {
         if (UBombTagGameInstance* GI = W->GetGameInstance<UBombTagGameInstance>())
         {
-            FString Nick = GI->GetPlayerNickname();
-            Nick.TrimStartAndEndInline();
-            bShowNewNickname = Nick.IsEmpty();
+            bShowNewNickname = !GI->HasPlayerNickname();
         }
     }
 
@@ -391,7 +389,7 @@ void UMainMenuWidget::SetWaitingRoomSlotPopulated(int32 PlayerIndex, const FStri
     if (UTextBlock* IdText = GetWaitingRoomSlotIdText(PlayerIndex))
     {
         const FText DisplayId = PlayerId.IsEmpty()
-            ? NSLOCTEXT("WaitingRoom", "GuestName", "Guest")
+            ? NSLOCTEXT("WaitingRoom", "UnknownName", "(Unknown)")
             : FText::FromString(PlayerId);
         IdText->SetText(DisplayId);
     }
@@ -545,7 +543,7 @@ void UMainMenuWidget::UpdateMyRecordMenu()
     if (MyRecordMenuNicknameText)
     {
         const FText NickTxt = Nick.IsEmpty()
-            ? NSLOCTEXT("MainMenu", "DefaultNickname", "Guest")
+            ? NSLOCTEXT("MainMenu", "NicknameUnset", "Please set a nickname")
             : FText::FromString(Nick);
         MyRecordMenuNicknameText->SetText(NickTxt);
     }
@@ -590,6 +588,8 @@ void UMainMenuWidget::ConfirmNewNickname()
     if (UBombTagGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UBombTagGameInstance>() : nullptr)
     {
         GI->SetPlayerNickname(Entered);
+        GI->Backend_Login(Entered);
+        bLoginRequested = true;
     }
 
     OpenMainMenu();

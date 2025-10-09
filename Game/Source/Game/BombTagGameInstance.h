@@ -42,6 +42,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Player Profile")
     FString GetPlayerNickname() const;
 
+    UFUNCTION(BlueprintPure, Category = "Player Profile")
+    bool HasPlayerNickname() const;
+
     UFUNCTION(BlueprintCallable, Category = "Player Profile")
     void RecordMatchResult(EBombTagMatchResult MatchResult);
 
@@ -66,7 +69,7 @@ public:
     void LeaveSession();
 
     UFUNCTION(BlueprintCallable, Category = "Backend")
-    void Backend_GuestLogin(const FString& InNickname);
+    void Backend_Login(const FString& InNickname);
 
     UFUNCTION(BlueprintCallable, Category = "Backend")
     void Backend_CreateRoom(const FString& Name, int32 MaxPlayers, const FString& Password);
