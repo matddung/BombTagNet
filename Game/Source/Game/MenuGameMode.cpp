@@ -2,7 +2,6 @@
 #include "BombTagPlayerController.h"
 
 #include "Blueprint/UserWidget.h"
-#include "GameFramework/PlayerController.h"
 
 AMenuGameMode::AMenuGameMode()
 {

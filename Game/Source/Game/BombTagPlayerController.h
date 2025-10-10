@@ -49,7 +49,6 @@ protected:
     void ServerSetPlayerNickname(const FString& Nickname);
 
     void ShowMainMenuInternal(TSubclassOf<UUserWidget> InMenuClass);
-    bool CanDisplayPlayerUI() const;
     void ApplyDefaultGameInputMode();
 
 protected:
@@ -75,9 +74,6 @@ protected:
     TObjectPtr<UUserWidget> MenuWidget;
 
     UPROPERTY()
-    TSubclassOf<UUserWidget> DeferredMenuClass;
-
-    UPROPERTY()
     TObjectPtr<UTextBlock> TimerText;
 
     UPROPERTY()
@@ -85,7 +81,6 @@ protected:
 
     float BorderFlashElapsed = 0.f;
     bool bBorderFlashEnabled = true;
-    bool bWantsHUDWidget = false;
 
 private:
     bool ValidateMatchSnapshot(const FBombTagMatchResultSnapshot& Snapshot) const;

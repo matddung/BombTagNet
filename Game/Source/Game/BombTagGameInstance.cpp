@@ -1,7 +1,6 @@
 #include "BombTagGameInstance.h"
 #include "BombTagSaveGame.h"
 #include "BombTagGameMode.h"
-#include "MenuGameMode.h"
 #include "ApiClient.h"
 #include "RoomService.h"
 
@@ -42,22 +41,6 @@ namespace
         }
 
         return GameModeOption;
-    }
-
-    FString AppendGameModeQueryParam(const FString& BaseUrl, const FString& GameModePath)
-    {
-        if (BaseUrl.IsEmpty() || GameModePath.IsEmpty())
-        {
-            return BaseUrl;
-        }
-
-        if (BaseUrl.Contains(TEXT("game=")))
-        {
-            return BaseUrl;
-        }
-
-        const TCHAR Separator = BaseUrl.Contains(TEXT("?")) ? TEXT('&') : TEXT('?');
-        return FString::Printf(TEXT("%s%cgame=%s"), *BaseUrl, Separator, *GameModePath);
     }
 
     bool IsBackendBaseUrlValid(FString& Url)
@@ -344,7 +327,6 @@ void UBombTagGameInstance::Backend_Login(const FString& InNickname)
 
     PlayerNickname = SavedNickname;
     PlayerId = PlayerNickname;
-    AccessToken.Reset();
 
     if (Api)
     {
@@ -731,35 +713,4 @@ bool UBombTagGameInstance::IsAsciiAlphanumeric(TCHAR Character) const
     return (Character >= '0' && Character <= '9') ||
         (Character >= 'A' && Character <= 'Z') ||
         (Character >= 'a' && Character <= 'z');
-}
-
-void UBombTagGameInstance::TravelToLobby()
-{
-    if (LobbyMapName.IsNone())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("LobbyMapName not set"));
-        return;
-    }
-    const FString Options = BuildGameModeOptionString(AMenuGameMode::StaticClass(), true);
-    UGameplayStatics::OpenLevel(this, LobbyMapName, true, Options);
-}
-
-void UBombTagGameInstance::ReturnToMenuMap()
-{
-    if (MenuReturnURL.IsEmpty()) return;
-
-    if (UWorld* World = GetWorld())
-    {
-        if (World->GetNetMode() != NM_Client)
-        {
-            const FString Options = BuildGameModeOptionString(AMenuGameMode::StaticClass(), false);
-            UGameplayStatics::OpenLevel(World, LobbyMapName, true, Options);
-        }
-        else if (APlayerController* PC = GetFirstLocalPlayerController())
-        {
-            const FString MenuGameModePath = AMenuGameMode::StaticClass()->GetPathName();
-            const FString TravelURL = AppendGameModeQueryParam(MenuReturnURL, MenuGameModePath);
-            PC->ClientTravel(TravelURL, TRAVEL_Absolute);
-        }
-    }
 }

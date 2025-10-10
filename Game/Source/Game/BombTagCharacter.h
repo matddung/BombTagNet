@@ -56,12 +56,6 @@ public:
 	virtual void DoLook(float Yaw, float Pitch);
 
 	UFUNCTION(BlueprintCallable, Category = "Input")
-	virtual void DoJumpStart();
-
-	UFUNCTION(BlueprintCallable, Category = "Input")
-	virtual void DoJumpEnd();
-
-	UFUNCTION(BlueprintCallable, Category = "Input")
 	void DoInteract();
 
 	UFUNCTION(Server, Reliable)

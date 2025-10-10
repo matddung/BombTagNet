@@ -22,6 +22,4 @@ protected:
     float RemainingGameTime = 0.f;
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-
-    void ServerUpdateRemainingTime(float DeltaSeconds);
 };

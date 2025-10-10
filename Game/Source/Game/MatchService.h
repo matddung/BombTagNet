@@ -34,9 +34,6 @@ struct GAME_API FMatchQueueStatus
     int32 ReadyInSeconds = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
-    int32 WaitForFourthSeconds = 0;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     int32 MinPlayers = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
@@ -73,6 +70,7 @@ public:
 private:
     bool ParseMatchQueueStatus(const TSharedPtr<class FJsonObject>& JsonObject, FMatchQueueStatus& OutStatus) const;
     EMatchTicketStatus ParseTicketStatus(const FString& StatusString) const;
+    void HandleQueueResponse(const TFunction<void(bool bSuccess, const FMatchQueueStatus& Status, const FString& Error)>& Callback, bool bOk, const FString& BodyOrError) const;
 
 private:
     UPROPERTY()

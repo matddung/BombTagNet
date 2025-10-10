@@ -34,14 +34,7 @@ public class RoomService {
             return Optional.empty();
         }
 
-        Room byId = rooms.get(normalized);
-        if (byId != null) {
-            return Optional.of(byId);
-        }
-
-        return rooms.values().stream()
-                .filter(r -> normalized.equalsIgnoreCase(r.name()))
-                .findFirst();
+        return Optional.ofNullable(rooms.get(normalized));
     }
 
     public Room join(Room r, Player p, String password) {

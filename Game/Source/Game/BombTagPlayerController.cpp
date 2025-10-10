@@ -50,17 +50,6 @@ void ABombTagPlayerController::BeginPlay()
         if (MobileControlsWidget) MobileControlsWidget->AddToPlayerScreen(0);
         else UE_LOG(LogTemp, Error, TEXT("Could not spawn mobile controls widget."));
     }
-
-    if (IsLocalPlayerController() && CanDisplayPlayerUI())
-    {
-        if (bWantsHUDWidget && !HUDWidget) ShowHUDWidget();
-        if (DeferredMenuClass)
-        {
-            const TSubclassOf<UUserWidget> MenuClassToShow = DeferredMenuClass;
-            DeferredMenuClass = nullptr;
-            ShowMainMenuInternal(MenuClassToShow);
-        }
-    }
 #endif
 }
 
@@ -157,14 +146,6 @@ void ABombTagPlayerController::ShowHUDWidget()
 #if !UE_SERVER
     if (!IsLocalPlayerController()) return;
     if (!HUDWidgetClass) return;
-
-    if (!CanDisplayPlayerUI())
-    {
-        bWantsHUDWidget = true;
-        return;
-    }
-
-    bWantsHUDWidget = false;
 
     if (!HUDWidget)
     {
@@ -307,13 +288,6 @@ void ABombTagPlayerController::ClientShowMainMenu_Implementation(TSubclassOf<UUs
     if (!IsLocalPlayerController()) return;
     if (!InMenuClass) return;
 
-    if (!CanDisplayPlayerUI())
-    {
-        DeferredMenuClass = InMenuClass;
-        return;
-    }
-
-    DeferredMenuClass = nullptr;
     ShowMainMenuInternal(InMenuClass);
 #endif
 }
@@ -333,13 +307,6 @@ void ABombTagPlayerController::ShowMainMenuInternal(TSubclassOf<UUserWidget> InM
         SetInputMode(InputMode);
         bShowMouseCursor = true;
     }
-#endif
-}
-
-bool ABombTagPlayerController::CanDisplayPlayerUI() const
-{
-#if !UE_SERVER
-    return IsLocalPlayerController() || GetNetMode() == NM_Client;
 #endif
 }
 

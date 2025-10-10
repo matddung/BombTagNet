@@ -41,18 +41,16 @@ void UResultEntryWidget::NativeConstruct()
                     return A.GetScore() > B.GetScore();
                 });
 
-            auto SetTextIfValid = [](UTextBlock* TextBlock, const FString& Name)
-                {
-                    if (TextBlock)
-                    {
-                        TextBlock->SetText(FText::FromString(Name));
-                    }
-                };
+            const TArray<UTextBlock*> RankingTextBlocks = { FirstIDText, SecondIDText, ThirdIDText, FourthIDText };
+            const int32 PlayerCount = PlayerStates.Num();
 
-            if (PlayerStates.Num() > 0) SetTextIfValid(FirstIDText, PlayerStates[0]->GetPlayerName());
-            if (PlayerStates.Num() > 1) SetTextIfValid(SecondIDText, PlayerStates[1]->GetPlayerName());
-            if (PlayerStates.Num() > 2) SetTextIfValid(ThirdIDText, PlayerStates[2]->GetPlayerName());
-            if (PlayerStates.Num() > 3) SetTextIfValid(FourthIDText, PlayerStates[3]->GetPlayerName());
+            for (int32 Index = 0; Index < RankingTextBlocks.Num() && Index < PlayerCount; ++Index)
+            {
+                if (UTextBlock* const TextBlock = RankingTextBlocks[Index])
+                {
+                    TextBlock->SetText(FText::FromString(PlayerStates[Index]->GetPlayerName()));
+                }
+            }
         }
     }
 
@@ -108,23 +106,22 @@ FReply UResultEntryWidget::NativeOnTouchStarted(const FGeometry& InGeometry, con
 
 void UResultEntryWidget::GoToMenu()
 {
+    const FString MenuMapPath = TEXT("/Game/Maps/MenuMap");
+    const FString GameModePath = AMenuGameMode::StaticClass()->GetPathName();
+    const FString Options = GameModePath.IsEmpty()
+        ? FString()
+        : FString::Printf(TEXT("game=%s"), *GameModePath);
+    const FString TravelURL = Options.IsEmpty()
+        ? MenuMapPath
+        : FString::Printf(TEXT("%s?%s"), *MenuMapPath, *Options);
+
     if (APlayerController* PC = GetOwningPlayer())
     {
-        const FString GameModePath = AMenuGameMode::StaticClass()->GetPathName();
-        const FString TravelURL = GameModePath.IsEmpty()
-            ? FString(TEXT("/Game/Maps/MenuMap"))
-            : FString::Printf(TEXT("/Game/Maps/MenuMap?game=%s"), *GameModePath);
         PC->ClientTravel(TravelURL, TRAVEL_Absolute);
-        return;
     }
-
-    if (UWorld* World = GetWorld())
+    else if (UWorld* World = GetWorld())
     {
-        const FString GameModePath = AMenuGameMode::StaticClass()->GetPathName();
-        const FString Options = GameModePath.IsEmpty()
-            ? FString()
-            : FString::Printf(TEXT("game=%s"), *GameModePath);
-        UGameplayStatics::OpenLevel(World, FName(TEXT("/Game/Maps/MenuMap")), true, Options);
+        UGameplayStatics::OpenLevel(World, FName(*MenuMapPath), true, Options);
     }
 }
 

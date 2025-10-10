@@ -23,9 +23,9 @@ public:
     void PostJson(const FString& Path, const FString& Body, FOnApiResponse Callback);
 
 private:
-    TSharedRef<class IHttpRequest, ESPMode::ThreadSafe> CreateRequest(const FString& Verb, const FString& Path, const TMap<FString, FString>* QueryParams);
+    TSharedRef<class IHttpRequest, ESPMode::ThreadSafe> CreateRequest(const FString& Verb, const FString& Path);
     void ProcessRequest(TSharedRef<class IHttpRequest, ESPMode::ThreadSafe> Request, FOnApiResponse Callback);
-    FString BuildUrl(const FString& Path, const TMap<FString, FString>* QueryParams) const;
+    FString BuildUrl(const FString& Path) const;
     void ApplyIdentityHeaders(TSharedRef<class IHttpRequest, ESPMode::ThreadSafe> Request) const;
 
 private:

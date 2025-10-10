@@ -16,7 +16,10 @@ void ABombTagStateBase::Tick(float DeltaSeconds)
 
     if (HasAuthority())
     {
-        ServerUpdateRemainingTime(DeltaSeconds);
+        if (ABombTagGameMode* GM = GetWorld()->GetAuthGameMode<ABombTagGameMode>())
+        {
+            RemainingGameTime = GM->GetRemainingGameTime();
+        }
     }
 }
 
@@ -30,12 +33,4 @@ void ABombTagStateBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
     DOREPLIFETIME(ABombTagStateBase, RemainingGameTime);
-}
-
-void ABombTagStateBase::ServerUpdateRemainingTime(float DeltaSeconds)
-{
-    if (ABombTagGameMode* GM = GetWorld()->GetAuthGameMode<ABombTagGameMode>())
-    {
-        RemainingGameTime = GM->GetRemainingGameTime();
-    }
 }

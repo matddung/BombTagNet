@@ -21,8 +21,6 @@ public class MatchService {
         CANCELLED
     }
 
-    private static final int DEFAULT_GAME_PORT = 7777;
-
     public record MatchInfo(String matchId, List<Player> players, String hostPlayerId, String hostAddress, int hostPort) {
     }
 
@@ -112,7 +110,7 @@ public class MatchService {
 
             if (ticket.status == TicketStatus.FORMING) {
                 PendingMatch match = ticket.pendingMatch;
-                if (match != null && !match.started) {
+                if (match != null) {
                     match.remove(ticket);
                     ticket.pendingMatch = null;
                     ticket.status = TicketStatus.CANCELLED;
@@ -150,7 +148,7 @@ public class MatchService {
     }
 
     private void assignTicket(MatchTicket ticket, long now) {
-        if (pendingMatch != null && !pendingMatch.started && pendingMatch.tickets.size() < MAX_PLAYERS) {
+        if (pendingMatch != null && pendingMatch.tickets.size() < MAX_PLAYERS) {
             pendingMatch.add(ticket);
             if (pendingMatch.tickets.size() >= MAX_PLAYERS) {
                 startMatch(pendingMatch);
@@ -196,14 +194,13 @@ public class MatchService {
 
     private void onCountdownFinished(String matchId) {
         synchronized (lock) {
-            if (pendingMatch != null && !pendingMatch.started && Objects.equals(pendingMatch.matchId, matchId)) {
+            if (pendingMatch != null && Objects.equals(pendingMatch.matchId, matchId)) {
                 startMatch(pendingMatch);
             }
         }
     }
 
     private void startMatch(PendingMatch match) {
-        match.started = true;
         if (match.countdown != null) {
             match.countdown.cancel(false);
         }
@@ -212,7 +209,7 @@ public class MatchService {
         MatchTicket hostTicket = match.tickets.isEmpty() ? null : match.tickets.get(0);
         String hostPlayerId = hostTicket == null ? null : hostTicket.player.playerId();
         String hostAddress = hostTicket == null ? null : hostTicket.address;
-        int hostPort = hostTicket == null || hostTicket.port == null ? DEFAULT_GAME_PORT : hostTicket.port;
+        int hostPort = 0;
 
         MatchInfo info = new MatchInfo(match.matchId, players, hostPlayerId, hostAddress, hostPort);
 
@@ -307,13 +304,11 @@ public class MatchService {
         private PendingMatch pendingMatch;
         private MatchInfo matchInfo;
         private final String address;
-        private final Integer port;
 
         private MatchTicket(String ticketId, Player player, String address) {
             this.ticketId = ticketId;
             this.player = player;
             this.address = (address == null || address.isBlank()) ? null : address;
-            this.port = DEFAULT_GAME_PORT;
         }
     }
 
@@ -322,7 +317,6 @@ public class MatchService {
         private final List<MatchTicket> tickets = new ArrayList<>();
         private ScheduledFuture<?> countdown;
         private Instant deadline = Instant.now();
-        private boolean started = false;
 
         private PendingMatch(String matchId) {
             this.matchId = matchId;

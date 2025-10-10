@@ -5,10 +5,8 @@
 
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
-#include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
-#include "EngineUtils.h"
 
 #if !UE_SERVER
 #include "ResultEntryWidget.h"
@@ -72,13 +70,6 @@ void ABombTagGameMode::OnGameTimerExpired()
 
     if (Characters.Num() <= 2)
     {
-#if !UE_SERVER
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("BOOM!"));
-        }
-#endif
-
         TSet<APlayerController*> WinningControllers;
         for (ABombTagCharacter* Ch : Characters)
         {
@@ -88,16 +79,6 @@ void ABombTagGameMode::OnGameTimerExpired()
                 {
                     WinningControllers.Add(PC);
                 }
-            }
-        }
-
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-        {
-            if (ABombTagPlayerController* PC = Cast<ABombTagPlayerController>(It->Get()))
-            {
-                const bool bWinner = WinningControllers.Contains(PC);
-
-                PC->ClientMessage(bWinner ? TEXT("WIN") : TEXT("Lose"));
             }
         }
 
@@ -151,12 +132,9 @@ void ABombTagGameMode::StartNewRound()
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("StartNewRound: %d chars"), Characters.Num());
-
     if (Characters.Num() > 0)
     {
         const int32 Index = FMath::RandRange(0, Characters.Num() - 1);
-        UE_LOG(LogTemp, Warning, TEXT("Give bomb to: %s"), *Characters[Index]->GetName());
         Characters[Index]->SetHasBomb_Server(true);
     }
 }
@@ -194,22 +172,9 @@ void ABombTagGameMode::HandleStartCountdown()
 {
     if (CountdownTime > 0)
     {
-#if !UE_SERVER
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Yellow, FString::FromInt(CountdownTime));
-        }
-#endif
         --CountdownTime;
         return;
     }
-
-#if !UE_SERVER
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Yellow, TEXT("Go!"));
-    }
-#endif
 
     GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
     StartNewRound();

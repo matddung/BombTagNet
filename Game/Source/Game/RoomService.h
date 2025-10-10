@@ -27,9 +27,6 @@ struct GAME_API FRoomSummary
     FString RoomId;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
-    FString Name;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Room")
     FString Status;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
@@ -76,9 +73,6 @@ struct GAME_API FMatchStartInfo
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString MatchId;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Match")
-    FString Map;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString HostPlayerId;

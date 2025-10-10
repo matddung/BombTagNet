@@ -5,17 +5,6 @@
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonSerializer.h"
 
-namespace
-{
-    FString StatusToUpper(const FString& In)
-    {
-        FString Normalized = In;
-        Normalized.TrimStartAndEndInline();
-        Normalized = Normalized.ToUpper();
-        return Normalized;
-    }
-}
-
 void UMatchService::Init(UApiClient* InApi)
 {
     ApiClient = InApi;
@@ -92,33 +81,7 @@ void UMatchService::GetQueueStatus(const FString& TicketId, TFunction<void(bool 
     FOnApiResponse Response;
     Response.BindLambda([this, Callback](bool bOk, const FString& BodyOrError)
         {
-            if (!Callback)
-            {
-                return;
-            }
-
-            if (!bOk)
-            {
-                Callback(false, FMatchQueueStatus(), BodyOrError);
-                return;
-            }
-
-            TSharedPtr<FJsonObject> RootObject;
-            TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
-            if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
-            {
-                Callback(false, FMatchQueueStatus(), TEXT("JSON_PARSE_ERROR"));
-                return;
-            }
-
-            FMatchQueueStatus Status;
-            if (!ParseMatchQueueStatus(RootObject, Status))
-            {
-                Callback(false, FMatchQueueStatus(), TEXT("JSON_PARSE_ERROR"));
-                return;
-            }
-
-            Callback(true, Status, FString());
+            HandleQueueResponse(Callback, bOk, BodyOrError);
         });
 
     ApiClient->Get(Path, MoveTemp(Response));
@@ -149,33 +112,7 @@ void UMatchService::CancelQueue(const FString& TicketId, TFunction<void(bool bSu
     FOnApiResponse Response;
     Response.BindLambda([this, Callback](bool bOk, const FString& BodyOrError)
         {
-            if (!Callback)
-            {
-                return;
-            }
-
-            if (!bOk)
-            {
-                Callback(false, FMatchQueueStatus(), BodyOrError);
-                return;
-            }
-
-            TSharedPtr<FJsonObject> RootObject;
-            TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
-            if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
-            {
-                Callback(false, FMatchQueueStatus(), TEXT("JSON_PARSE_ERROR"));
-                return;
-            }
-
-            FMatchQueueStatus Status;
-            if (!ParseMatchQueueStatus(RootObject, Status))
-            {
-                Callback(false, FMatchQueueStatus(), TEXT("JSON_PARSE_ERROR"));
-                return;
-            }
-
-            Callback(true, Status, FString());
+            HandleQueueResponse(Callback, bOk, BodyOrError);
         });
 
     ApiClient->PostJson(Path, TEXT("{}"), MoveTemp(Response));
@@ -202,7 +139,7 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
 
     OutStatus = FMatchQueueStatus();
     OutStatus.TicketId = TicketId;
-    OutStatus.Status = ParseTicketStatus(StatusToUpper(StatusString));
+    OutStatus.Status = ParseTicketStatus(StatusString);
 
     double NumberValue = 0.0;
     if (JsonObject->TryGetNumberField(TEXT("position"), NumberValue))
@@ -213,11 +150,6 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
     if (JsonObject->TryGetNumberField(TEXT("readyInSeconds"), NumberValue))
     {
         OutStatus.ReadyInSeconds = static_cast<int32>(NumberValue);
-    }
-
-    if (JsonObject->TryGetNumberField(TEXT("waitForFourthSeconds"), NumberValue))
-    {
-        OutStatus.WaitForFourthSeconds = static_cast<int32>(NumberValue);
     }
 
     if (JsonObject->TryGetNumberField(TEXT("minPlayers"), NumberValue))
@@ -239,7 +171,6 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
     const TArray<TSharedPtr<FJsonValue>>* PlayersArray = nullptr;
     if (JsonObject->TryGetArrayField(TEXT("players"), PlayersArray) && PlayersArray)
     {
-        OutStatus.Players.Empty();
         for (const TSharedPtr<FJsonValue>& Value : *PlayersArray)
         {
             TSharedPtr<FJsonObject> PlayerObj = Value.IsValid() ? Value->AsObject() : nullptr;
@@ -267,9 +198,43 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
     return true;
 }
 
+void UMatchService::HandleQueueResponse(const TFunction<void(bool, const FMatchQueueStatus&, const FString&)>& Callback, bool bOk, const FString& BodyOrError) const
+{
+    if (!Callback)
+    {
+        return;
+    }
+
+    if (!bOk)
+    {
+        Callback(false, FMatchQueueStatus(), BodyOrError);
+        return;
+    }
+
+    TSharedPtr<FJsonObject> RootObject;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
+    if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
+    {
+        Callback(false, FMatchQueueStatus(), TEXT("JSON_PARSE_ERROR"));
+        return;
+    }
+
+    FMatchQueueStatus Status;
+    if (!ParseMatchQueueStatus(RootObject, Status))
+    {
+        Callback(false, FMatchQueueStatus(), TEXT("JSON_PARSE_ERROR"));
+        return;
+    }
+
+    Callback(true, Status, FString());
+}
+
 EMatchTicketStatus UMatchService::ParseTicketStatus(const FString& StatusString) const
 {
-    const FString Normalized = StatusToUpper(StatusString);
+    FString Normalized = StatusString;
+    Normalized.TrimStartAndEndInline();
+    Normalized.ToUpperInline();
+
     if (Normalized == TEXT("QUEUED"))
     {
         return EMatchTicketStatus::Queued;

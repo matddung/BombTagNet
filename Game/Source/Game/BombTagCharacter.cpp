@@ -101,16 +101,6 @@ void ABombTagCharacter::DoLook(float Yaw, float Pitch)
 	}
 }
 
-void ABombTagCharacter::DoJumpStart()
-{
-	Jump();
-}
-
-void ABombTagCharacter::DoJumpEnd()
-{
-	StopJumping();
-}
-
 void ABombTagCharacter::DoInteract()
 {
 	if (!bHasBomb) return;

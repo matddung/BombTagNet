@@ -10,8 +10,6 @@ class GAME_API UBombTagSaveGame : public USaveGame
 	GENERATED_BODY()
 	
 public:
-    UBombTagSaveGame();
-
     UPROPERTY(BlueprintReadWrite, Category = "Player Profile")
     FString Nickname = TEXT("");
 

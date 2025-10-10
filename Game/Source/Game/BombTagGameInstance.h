@@ -19,7 +19,6 @@ enum class EBombTagMatchResult : uint8
     Lose
 };
 
-DECLARE_MULTICAST_DELEGATE(FOnWaitingRoomJoinSucceeded);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBackendLogin, bool, bSuccess, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomJoined, bool, bSuccess, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomUpdated, const FRoomSummary&, RoomSummary);
@@ -56,8 +55,6 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Player Profile")
     FOnPlayerRecordUpdated OnPlayerRecordUpdated;
-
-    FOnWaitingRoomJoinSucceeded& OnWaitingRoomJoinSucceeded() { return WaitingRoomJoinSucceededDelegate; }
 
     UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
     void HostOnlineSession(const FString& SessionName, const FString& SessionPassword, int32 MaxPublicConnections, bool bIsLanMatch);
@@ -120,8 +117,6 @@ private:
     bool IsValidNickname(const FString& Nickname) const;
     bool IsAsciiAlphanumeric(TCHAR Character) const;
 
-    void TravelToLobby();
-    void ReturnToMenuMap();
     void ResetCurrentSessionState();
     void ResetMatchQueueState();
     void StartMatchQueuePolling();
@@ -150,7 +145,6 @@ private:
 
     FString PlayerId;
     FString PlayerNickname;
-    FString AccessToken;
     FString CurrentRoomId;
     bool bRoomHasStarted = false;
 
@@ -165,13 +159,5 @@ private:
     int32 PendingMatchHostPort = 0;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
-    FName LobbyMapName = FName(TEXT("/Game/Maps/MenuMap"));
-
-    UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName MatchMapName = FName(TEXT("/Game/Maps/MainMap"));
-
-    UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
-    FString MenuReturnURL = TEXT("/Game/Maps/MenuMap");
-
-    FOnWaitingRoomJoinSucceeded WaitingRoomJoinSucceededDelegate;
 };
