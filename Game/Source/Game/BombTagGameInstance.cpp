@@ -3,7 +3,6 @@
 #include "BombTagGameMode.h"
 #include "MenuGameMode.h"
 #include "ApiClient.h"
-#include "AuthService.h"
 #include "RoomService.h"
 
 #include "Kismet/GameplayStatics.h"
@@ -117,12 +116,6 @@ void UBombTagGameInstance::Init()
         Api->Init(BackendBaseUrl, TimeoutSec);
     }
 
-    Auth = NewObject<UAuthService>(this);
-    if (Auth && Api)
-    {
-        Auth->Init(Api);
-    }
-
     Room = NewObject<URoomService>(this);
     if (Room && Api)
     {
@@ -137,6 +130,17 @@ void UBombTagGameInstance::Init()
 
     LoadOrCreatePlayerData();
     PlayerNickname = GetPlayerNickname();
+    if (Api)
+    {
+        if (!PlayerNickname.IsEmpty())
+        {
+            Api->SetLocalPlayerIdentity(PlayerNickname, PlayerNickname);
+        }
+        else
+        {
+            Api->ClearLocalPlayerIdentity();
+        }
+    }
     BroadcastPlayerRecord();
     UE_LOG(LogTemp, Log, TEXT("BombTag GameInstance initialized"));
 }
@@ -321,13 +325,6 @@ void UBombTagGameInstance::LeaveSession()
 
 void UBombTagGameInstance::Backend_Login(const FString& InNickname)
 {
-    if (!Auth)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Backend_Login failed: Auth service not ready"));
-        OnBackendLogin.Broadcast(false, TEXT("NOT_INITIALIZED"));
-        return;
-    }
-
     FString NickToUse = InNickname;
     NickToUse.TrimStartAndEndInline();
 
@@ -338,29 +335,24 @@ void UBombTagGameInstance::Backend_Login(const FString& InNickname)
         return;
     }
 
-    Auth->Login(NickToUse, [this](bool bSuccess, const FBackendLoginRes& Response, const FString& Error)
-        {
-            if (!bSuccess)
-            {
-                UE_LOG(LogTemp, Error, TEXT("Backend login failed: %s"), *Error);
-                OnBackendLogin.Broadcast(false, Error);
-                return;
-            }
+    FString SavedNickname = GetPlayerNickname();
+    if (SavedNickname.IsEmpty() || !SavedNickname.Equals(NickToUse, ESearchCase::CaseSensitive))
+    {
+        SetPlayerNickname(NickToUse);
+        SavedNickname = GetPlayerNickname();
+    }
 
-            PlayerId = Response.PlayerId;
-            PlayerNickname = Response.Nickname;
-            AccessToken = Response.AccessToken;
+    PlayerNickname = SavedNickname;
+    PlayerId = PlayerNickname;
+    AccessToken.Reset();
 
-            if (Api)
-            {
-                Api->SetAuthToken(FString::Printf(TEXT("Bearer %s"), *AccessToken));
-            }
+    if (Api)
+    {
+        Api->SetLocalPlayerIdentity(PlayerId, PlayerNickname);
+    }
 
-            PlayerNickname.TrimStartAndEndInline();
-
-            UE_LOG(LogTemp, Log, TEXT("Logged in as %s (%s)"), *PlayerNickname, *PlayerId);
-            OnBackendLogin.Broadcast(true, FString());
-        });
+    UE_LOG(LogTemp, Log, TEXT("Using local profile for login: %s"), *PlayerNickname);
+    OnBackendLogin.Broadcast(true, FString());
 }
 
 void UBombTagGameInstance::Backend_CreateRoom(const FString& Name, int32 MaxPlayers, const FString& Password)

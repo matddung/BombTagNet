@@ -9,7 +9,6 @@
 
 class UBombTagSaveGame;
 class UApiClient;
-class UAuthService;
 class URoomService;
 class UMatchService;
 
@@ -137,9 +136,6 @@ private:
 
     UPROPERTY()
     TObjectPtr<UApiClient> Api = nullptr;
-
-    UPROPERTY()
-    TObjectPtr<UAuthService> Auth = nullptr;
 
     UPROPERTY()
     TObjectPtr<URoomService> Room = nullptr;

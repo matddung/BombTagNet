@@ -3,12 +3,10 @@ package com.BombTagNet.Backend.controller;
 import com.BombTagNet.Backend.dao.Player;
 import com.BombTagNet.Backend.dao.Room;
 import com.BombTagNet.Backend.dto.RoomDto.*;
-import com.BombTagNet.Backend.jwt.JwtAuthFilter.PlayerPrincipal;
 import com.BombTagNet.Backend.service.RoomService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,48 +20,34 @@ public class RoomController {
         this.rooms = rooms;
     }
 
-    private String pid(Authentication auth) {
-        if (auth == null) {
-            throw new IllegalStateException("UNAUTHENTICATED");
+    private String pid(HttpServletRequest request) {
+        if (request == null) {
+            throw new IllegalStateException("PLAYER_ID_REQUIRED");
         }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof PlayerPrincipal pp) {
-            return pp.playerId();
+        String id = request.getHeader("X-Player-Id");
+        if (id == null || id.isBlank()) {
+            throw new IllegalStateException("PLAYER_ID_REQUIRED");
         }
-        if (principal instanceof String s) {
-            return s;
-        }
-        return principal == null ? null : principal.toString();
+        return id.trim();
     }
 
-    private String nicknameFromAuth(Authentication auth) {
-        if (auth == null) {
-            throw new IllegalStateException("UNAUTHENTICATED");
+    private String nickname(HttpServletRequest request) {
+        if (request == null) {
+            throw new IllegalStateException("PLAYER_NICKNAME_REQUIRED");
         }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof PlayerPrincipal pp) {
-            String nickname = pp.nickname();
-            if (nickname != null && !nickname.isBlank()) {
-                return nickname;
-            }
-            return pp.playerId();
+        String nickname = request.getHeader("X-Player-Nickname");
+        if (nickname == null || nickname.isBlank()) {
+            return pid(request);
         }
-        Object details = auth.getDetails();
-        if (details instanceof PlayerPrincipal pp) {
-            String nickname = pp.nickname();
-            if (nickname != null && !nickname.isBlank()) {
-                return nickname;
-            }
-            return pp.playerId();
-        }
-        return pid(auth);
+        return nickname.trim();
     }
 
     @PostMapping
-    public ResponseEntity<RoomSummary> create(Authentication auth, HttpServletRequest request, @RequestBody CreateRoomReq req) {
-        Room r = rooms.create(pid(auth), req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password(),
+    public ResponseEntity<RoomSummary> create(HttpServletRequest request, @RequestBody CreateRoomReq req) {
+        String playerId = pid(request);
+        Room r = rooms.create(playerId, req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password(),
                 request == null ? null : request.getRemoteAddr());
-        Player host = new Player(pid(auth), nicknameFromAuth(auth));
+        Player host = new Player(playerId, nickname(request));
         r.add(host);
         List<Player> players = List.copyOf(r.players());
         return ResponseEntity.ok(new RoomSummary(r.roomId(), r.name(), r.hostId(), r.status(), 2, r.maxPlayers(), r.size(), players,
@@ -71,32 +55,35 @@ public class RoomController {
     }
 
     @PostMapping("/{roomId}/join")
-    public ResponseEntity<JoinRoomRes> join(Authentication auth, @PathVariable String roomId, @RequestBody(required = false) JoinRoomReq req) {
+    public ResponseEntity<JoinRoomRes> join(HttpServletRequest request, @PathVariable String roomId, @RequestBody(required = false) JoinRoomReq req) {
         Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
-        String nick = nicknameFromAuth(auth);
-        rooms.join(r, new Player(pid(auth), nick), req == null ? null : req.password());
+        String playerId = pid(request);
+        String nick = nickname(request);
+        rooms.join(r, new Player(playerId, nick), req == null ? null : req.password());
         int slot = r.size();
         return ResponseEntity.ok(new JoinRoomRes(r.roomId(), slot, List.copyOf(r.players())));
     }
 
     @PostMapping("/{roomId}/leave")
-    public ResponseEntity<?> leave(Authentication auth, @PathVariable String roomId) {
+    public ResponseEntity<?> leave(HttpServletRequest request, @PathVariable String roomId) {
         Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
-        rooms.leave(r, pid(auth));
+        String playerId = pid(request);
+        rooms.leave(r, playerId);
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/{roomId}")
-    public ResponseEntity<RoomDetail> get(Authentication auth, @PathVariable String roomId) {
+    public ResponseEntity<RoomDetail> get(HttpServletRequest request, @PathVariable String roomId) {
+        pid(request);
         Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
         return ResponseEntity.ok(new RoomDetail(r.roomId(), r.name(), r.status(), 2, r.maxPlayers(), r.size(), List.copyOf(r.players()),
                 r.hostId(), r.hostAddress(), r.hostPort()));
     }
 
     @PostMapping("/{roomId}/start")
-    public ResponseEntity<?> start(Authentication auth, HttpServletRequest request, @PathVariable String roomId) {
+    public ResponseEntity<?> start(HttpServletRequest request, @PathVariable String roomId) {
         Room r = rooms.find(roomId).orElseThrow(() -> new IllegalStateException("ROOM_NOT_FOUND"));
-        rooms.start(r, pid(auth), 2);
+        rooms.start(r, pid(request), 2);
         if (request != null) {
             r.updateHostEndpoint(request.getRemoteAddr(), r.hostPort());
         }

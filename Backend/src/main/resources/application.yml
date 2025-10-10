@@ -7,11 +7,6 @@ logging:
 server:
   port: 8080
 
-app:
-  jwt:
-    secret: cd34182c15a3298b07f09eda397a6b131ec5d7c672dc470a3ce4aa767fe9d174
-    expiresSeconds: 3600
-
 spring:
   jackson:
     serialization:

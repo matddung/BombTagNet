@@ -3,13 +3,11 @@ package com.BombTagNet.Backend.controller;
 import com.BombTagNet.Backend.dto.MatchDto.MatchQueueStatusRes;
 import com.BombTagNet.Backend.dto.MatchDto.MatchResultReq;
 import com.BombTagNet.Backend.dto.MatchDto.OkRes;
-import com.BombTagNet.Backend.jwt.JwtAuthFilter.PlayerPrincipal;
 import com.BombTagNet.Backend.service.MatchService;
 import com.BombTagNet.Backend.service.MatchService.MatchQueueStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -23,41 +21,26 @@ public class MatchController {
         this.match = match;
     }
 
-    private String pid(Authentication auth) {
-        if (auth == null) {
-            throw new IllegalStateException("UNAUTHENTICATED");
+    private String pid(HttpServletRequest request) {
+        if (request == null) {
+            throw new IllegalStateException("PLAYER_ID_REQUIRED");
         }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof PlayerPrincipal pp) {
-            return pp.playerId();
+        String id = request.getHeader("X-Player-Id");
+        if (id == null || id.isBlank()) {
+            throw new IllegalStateException("PLAYER_ID_REQUIRED");
         }
-        if (principal instanceof String s) {
-            return s;
-        }
-        return principal == null ? null : principal.toString();
+        return id.trim();
     }
 
-    private String nicknameFromAuth(Authentication auth) {
-        if (auth == null) {
-            throw new IllegalStateException("UNAUTHENTICATED");
+    private String nickname(HttpServletRequest request) {
+        if (request == null) {
+            throw new IllegalStateException("PLAYER_NICKNAME_REQUIRED");
         }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof PlayerPrincipal pp) {
-            String nickname = pp.nickname();
-            if (nickname != null && !nickname.isBlank()) {
-                return nickname;
-            }
-            return pp.playerId();
+        String nickname = request.getHeader("X-Player-Nickname");
+        if (nickname == null || nickname.isBlank()) {
+            return pid(request);
         }
-        Object details = auth.getDetails();
-        if (details instanceof PlayerPrincipal pp) {
-            String nickname = pp.nickname();
-            if (nickname != null && !nickname.isBlank()) {
-                return nickname;
-            }
-            return pp.playerId();
-        }
-        return pid(auth);
+        return nickname.trim();
     }
 
     private MatchQueueStatusRes toResponse(MatchQueueStatus status) {
@@ -78,22 +61,23 @@ public class MatchController {
     }
 
     @PostMapping("/queue")
-    public ResponseEntity<MatchQueueStatusRes> enqueue(Authentication auth, HttpServletRequest request) {
-        MatchQueueStatus status = match.enqueue(pid(auth), nicknameFromAuth(auth), request == null ? null : request.getRemoteAddr());
+    public ResponseEntity<MatchQueueStatusRes> enqueue(HttpServletRequest request) {
+        String playerId = pid(request);
+        MatchQueueStatus status = match.enqueue(playerId, nickname(request), request == null ? null : request.getRemoteAddr());
         return ResponseEntity.ok(toResponse(status));
     }
 
     @GetMapping("/queue/{ticketId}")
-    public ResponseEntity<MatchQueueStatusRes> status(Authentication auth, @PathVariable String ticketId) {
-        return match.status(pid(auth), ticketId)
+    public ResponseEntity<MatchQueueStatusRes> status(HttpServletRequest request, @PathVariable String ticketId) {
+        return match.status(pid(request), ticketId)
                 .map(this::toResponse)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new IllegalStateException("TICKET_NOT_FOUND"));
     }
 
     @PostMapping("/queue/{ticketId}/cancel")
-    public ResponseEntity<MatchQueueStatusRes> cancel(Authentication auth, @PathVariable String ticketId) {
-        return match.cancel(pid(auth), ticketId)
+    public ResponseEntity<MatchQueueStatusRes> cancel(HttpServletRequest request, @PathVariable String ticketId) {
+        return match.cancel(pid(request), ticketId)
                 .map(this::toResponse)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new IllegalStateException("TICKET_NOT_FOUND"));

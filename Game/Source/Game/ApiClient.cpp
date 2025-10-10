@@ -17,14 +17,19 @@ void UApiClient::Init(const FString& InBaseUrl, float InTimeoutSec)
     TimeoutSeconds = FMath::Max(0.0f, InTimeoutSec);
 }
 
-void UApiClient::SetAuthToken(const FString& InToken)
+void UApiClient::SetLocalPlayerIdentity(const FString& InPlayerId, const FString& InNickname)
 {
-    AuthToken = InToken;
+    PlayerId = InPlayerId;
+    PlayerId.TrimStartAndEndInline();
+
+    PlayerNickname = InNickname;
+    PlayerNickname.TrimStartAndEndInline();
 }
 
-void UApiClient::ClearAuthToken()
+void UApiClient::ClearLocalPlayerIdentity()
 {
-    AuthToken.Reset();
+    PlayerId.Reset();
+    PlayerNickname.Reset();
 }
 
 void UApiClient::Get(const FString& Path, const TMap<FString, FString>& QueryParams, FOnApiResponse Callback)
@@ -57,11 +62,7 @@ TSharedRef<IHttpRequest, ESPMode::ThreadSafe> UApiClient::CreateRequest(const FS
     Request->SetHeader(TEXT("Accept"), TEXT("application/json"));
     Request->SetTimeout(TimeoutSeconds);
 
-    const FString AuthHeader = GetAuthorizationHeader();
-    if (!AuthHeader.IsEmpty())
-    {
-        Request->SetHeader(TEXT("Authorization"), AuthHeader);
-    }
+    ApplyIdentityHeaders(Request);
 
     return Request;
 }
@@ -141,17 +142,16 @@ FString UApiClient::BuildUrl(const FString& Path, const TMap<FString, FString>* 
     return Url;
 }
 
-FString UApiClient::GetAuthorizationHeader() const
+void UApiClient::ApplyIdentityHeaders(TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request) const
 {
-    if (AuthToken.IsEmpty())
+    if (!PlayerId.IsEmpty())
     {
-        return FString();
+        Request->SetHeader(TEXT("X-Player-Id"), PlayerId);
     }
 
-    if (AuthToken.StartsWith(TEXT("Bearer ")))
+    const FString NickToSend = PlayerNickname.IsEmpty() ? PlayerId : PlayerNickname;
+    if (!NickToSend.IsEmpty())
     {
-        return AuthToken;
+        Request->SetHeader(TEXT("X-Player-Nickname"), NickToSend);
     }
-
-    return FString::Printf(TEXT("Bearer %s"), *AuthToken);
 }

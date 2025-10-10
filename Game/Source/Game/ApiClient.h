@@ -14,8 +14,8 @@ class GAME_API UApiClient : public UObject
 public:
     void Init(const FString& InBaseUrl, float InTimeoutSec);
 
-    void SetAuthToken(const FString& InToken);
-    void ClearAuthToken();
+    void SetLocalPlayerIdentity(const FString& InPlayerId, const FString& InNickname);
+    void ClearLocalPlayerIdentity();
 
     void Get(const FString& Path, const TMap<FString, FString>& QueryParams, FOnApiResponse Callback);
     void Get(const FString& Path, FOnApiResponse Callback);
@@ -26,10 +26,11 @@ private:
     TSharedRef<class IHttpRequest, ESPMode::ThreadSafe> CreateRequest(const FString& Verb, const FString& Path, const TMap<FString, FString>* QueryParams);
     void ProcessRequest(TSharedRef<class IHttpRequest, ESPMode::ThreadSafe> Request, FOnApiResponse Callback);
     FString BuildUrl(const FString& Path, const TMap<FString, FString>* QueryParams) const;
-    FString GetAuthorizationHeader() const;
+    void ApplyIdentityHeaders(TSharedRef<class IHttpRequest, ESPMode::ThreadSafe> Request) const;
 
 private:
     FString BaseUrl;
     float TimeoutSeconds = 30.f;
-    FString AuthToken;
+    FString PlayerId;
+    FString PlayerNickname;
 };
