@@ -16,12 +16,10 @@ public class RoomService {
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final AtomicInteger seq = new AtomicInteger(1);
 
-    private static final int DEFAULT_GAME_PORT = 7777;
-
     public Room create(String hostId, String name, int maxPlayers, String password, String hostAddress) {
         String id = "r_" + seq.getAndIncrement();
         Room r = new Room(id, hostId, name == null ? "Room" : name, Math.max(2, Math.min(4, maxPlayers)), password);
-        r.updateHostEndpoint(hostAddress, DEFAULT_GAME_PORT);
+        r.updateHostEndpoint(hostAddress, 0);
         rooms.put(id, r);
         return r;
     }

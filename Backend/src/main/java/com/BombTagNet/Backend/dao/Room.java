@@ -34,12 +34,6 @@ public class Room {
         return hostId;
     }
 
-    public void assignHost(String hostId) {
-        if (hostId != null && !hostId.isBlank()) {
-            this.hostId = hostId;
-        }
-    }
-
     public String hostAddress() {
         return hostAddress;
     }
