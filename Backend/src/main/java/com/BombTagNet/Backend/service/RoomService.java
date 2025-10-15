@@ -24,17 +24,24 @@ public class RoomService {
         return r;
     }
 
-    public Optional<Room> find(String roomId) {
-        if (roomId == null) {
+    public Optional<Room> find(String roomIdOrName) {
+        if (roomIdOrName == null) {
             return Optional.empty();
         }
 
-        String normalized = roomId.trim();
+        String normalized = roomIdOrName.trim();
         if (normalized.isEmpty()) {
             return Optional.empty();
         }
 
-        return Optional.ofNullable(rooms.get(normalized));
+        Room byId = rooms.get(normalized);
+        if (byId != null) {
+            return Optional.of(byId);
+        }
+
+        return rooms.values().stream()
+                .filter(r -> r.roomId().equalsIgnoreCase(normalized) || r.name().equalsIgnoreCase(normalized))
+                .findFirst();
     }
 
     public Room join(Room r, Player p, String password) {
