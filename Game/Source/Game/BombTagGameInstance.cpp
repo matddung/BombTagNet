@@ -14,7 +14,7 @@ namespace
 {
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
-    const TCHAR* DefaultBackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
+    const TCHAR* DefaultBackendBaseUrl = TEXT("http://34.64.149.81:8080/api");
     constexpr int32 DefaultMatchPort = 7777;
 
     FString BuildGameModeOptionString(const UClass* GameModeClass, bool bListen)

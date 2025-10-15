@@ -44,12 +44,7 @@ void ABombTagPlayerController::BeginPlay()
         ServerSetPlayerNickname(Nickname);
     }
 
-    if (IsLocalPlayerController() && SVirtualJoystick::ShouldDisplayTouchInterface())
-    {
-        MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
-        if (MobileControlsWidget) MobileControlsWidget->AddToPlayerScreen(0);
-        else UE_LOG(LogTemp, Error, TEXT("Could not spawn mobile controls widget."));
-    }
+    ShowMobileControlsIfNeeded();
 #endif
 }
 
@@ -157,6 +152,7 @@ void ABombTagPlayerController::ShowHUDWidget()
         TimerText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("TimerText")));
         BorderFlash = Cast<UBorder>(HUDWidget->GetWidgetFromName(TEXT("BorderFlash")));
         if (BorderFlash) BorderFlash->SetRenderOpacity(0.f);
+        ShowMobileControlsIfNeeded();
     }
 #endif
 }
@@ -298,6 +294,7 @@ void ABombTagPlayerController::ShowMainMenuInternal(TSubclassOf<UUserWidget> InM
     if (!IsLocalPlayerController()) return;
 
     if (HUDWidget) HUDWidget->RemoveFromParent();
+    HideMobileControls();
     if (!MenuWidget) MenuWidget = CreateWidget<UUserWidget>(this, InMenuClass);
 
     if (MenuWidget && !MenuWidget->IsInViewport())
@@ -322,5 +319,45 @@ void ABombTagPlayerController::ApplyDefaultGameInputMode()
     InputMode.SetConsumeCaptureMouseDown(true);
     SetInputMode(InputMode);
     bShowMouseCursor = false;
+#endif
+}
+
+void ABombTagPlayerController::ShowMobileControlsIfNeeded()
+{
+#if !UE_SERVER
+    if (!IsLocalPlayerController())
+    {
+        return;
+    }
+
+    if (!SVirtualJoystick::ShouldDisplayTouchInterface())
+    {
+        return;
+    }
+
+    if (!MobileControlsWidget && MobileControlsWidgetClass)
+    {
+        MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
+        if (!MobileControlsWidget)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Could not create mobile controls widget."));
+            return;
+        }
+    }
+
+    if (MobileControlsWidget && !MobileControlsWidget->IsInViewport())
+    {
+        MobileControlsWidget->AddToPlayerScreen(0);
+    }
+#endif
+}
+
+void ABombTagPlayerController::HideMobileControls()
+{
+#if !UE_SERVER
+    if (MobileControlsWidget)
+    {
+        MobileControlsWidget->RemoveFromParent();
+    }
 #endif
 }

@@ -50,6 +50,9 @@ protected:
 
     void ShowMainMenuInternal(TSubclassOf<UUserWidget> InMenuClass);
     void ApplyDefaultGameInputMode();
+    void ShowMobileControlsIfNeeded();
+    void HideMobileControls();
+
 
 protected:
     UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
