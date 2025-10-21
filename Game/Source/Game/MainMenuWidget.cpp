@@ -872,4 +872,189 @@ void UMainMenuWidget::HandleMatchQueueStatus(bool bSuccess, const FMatchQueueSta
     }
 }
 
+#else // UE_SERVER
+
+bool UMainMenuWidget::Initialize()
+{
+    return Super::Initialize();
+}
+
+void UMainMenuWidget::NativeConstruct()
+{
+    Super::NativeConstruct();
+}
+
+void UMainMenuWidget::NativeDestruct()
+{
+    Super::NativeDestruct();
+}
+
+void UMainMenuWidget::OpenMatchMenu() {}
+
+void UMainMenuWidget::OpenHostMenu() {}
+
+void UMainMenuWidget::OpenJoinMenu() {}
+
+void UMainMenuWidget::OpenMyRecordMenu() {}
+
+void UMainMenuWidget::OpenMainMenu() {}
+
+void UMainMenuWidget::OnWaitingRoomBackClicked() {}
+
+void UMainMenuWidget::OpenWaitingRoomMenu() {}
+
+void UMainMenuWidget::CreateHostMatch() {}
+
+void UMainMenuWidget::JoinMatch() {}
+
+void UMainMenuWidget::JoinMatchQueue() {}
+
+void UMainMenuWidget::LeaveMatchQueue() {}
+
+void UMainMenuWidget::OnHostMenuPasswordCheckBoxChanged(bool bIsChecked)
+{
+    (void)bIsChecked;
+}
+
+void UMainMenuWidget::SetMatchMenuStatus(const FText& StatusText, bool bAnimateDots, const FLinearColor& Color)
+{
+    (void)StatusText;
+    (void)bAnimateDots;
+    (void)Color;
+}
+
+void UMainMenuWidget::WaitingRoomStart() {}
+
+void UMainMenuWidget::WaitingRoomPlayerMenu(int32 PlayerIndex)
+{
+    (void)PlayerIndex;
+}
+
+void UMainMenuWidget::ResetWaitingRoomSlots() {}
+
+void UMainMenuWidget::SetWaitingRoomSlotWaiting(int32 PlayerIndex)
+{
+    (void)PlayerIndex;
+}
+
+void UMainMenuWidget::SetWaitingRoomSlotPopulated(int32 PlayerIndex, const FString& PlayerId, int32 WinCount, int32 LoseCount)
+{
+    (void)PlayerIndex;
+    (void)PlayerId;
+    (void)WinCount;
+    (void)LoseCount;
+}
+
+void UMainMenuWidget::EnterWaitingRoomForLocalPlayer() {}
+
+UWidgetSwitcher* UMainMenuWidget::GetWaitingRoomSlotSwitcher(int32 PlayerIndex) const
+{
+    (void)PlayerIndex;
+    return nullptr;
+}
+
+UTextBlock* UMainMenuWidget::GetWaitingRoomSlotIdText(int32 PlayerIndex) const
+{
+    (void)PlayerIndex;
+    return nullptr;
+}
+
+UTextBlock* UMainMenuWidget::GetWaitingRoomSlotRecordText(int32 PlayerIndex) const
+{
+    (void)PlayerIndex;
+    return nullptr;
+}
+
+void UMainMenuWidget::StartWaitingRoomSlotUpdates() {}
+
+void UMainMenuWidget::StopWaitingRoomSlotUpdates() {}
+
+void UMainMenuWidget::RequestLeaveCurrentRoom() {}
+
+void UMainMenuWidget::UpdateWaitingRoomSlotsFromGameState() {}
+
+void UMainMenuWidget::UpdateMyRecordMenu() {}
+
+void UMainMenuWidget::OpenNewNicknameMenu() {}
+
+void UMainMenuWidget::ConfirmNewNickname() {}
+
+void UMainMenuWidget::OnNewNicknameTextChanged(const FText& NewText)
+{
+    (void)NewText;
+}
+
+bool UMainMenuWidget::IsValidNickname(const FString& Nickname) const
+{
+    (void)Nickname;
+    return true;
+}
+
+FText UMainMenuWidget::GetNicknameValidationErrorText(const FString& Nickname) const
+{
+    (void)Nickname;
+    return FText::GetEmpty();
+}
+
+void UMainMenuWidget::UpdateNewNicknameError(const FString& Nickname)
+{
+    (void)Nickname;
+}
+
+bool UMainMenuWidget::IsAsciiAlphanumeric(TCHAR Character) const
+{
+    (void)Character;
+    return true;
+}
+
+void UMainMenuWidget::UpdateMatchMenuDots() {}
+
+void UMainMenuWidget::RequestRoomSummaryRefresh() {}
+
+void UMainMenuWidget::ApplyRoomSummary(const FRoomSummary& RoomSummary)
+{
+    (void)RoomSummary;
+}
+
+void UMainMenuWidget::ShowErrorMessage(UTextBlock* Target, const FString& Message)
+{
+    (void)Target;
+    (void)Message;
+}
+
+void UMainMenuWidget::HandleBackendLogin(bool bSuccess, const FString& ErrorMessage)
+{
+    (void)bSuccess;
+    (void)ErrorMessage;
+}
+
+void UMainMenuWidget::HandleRoomJoined(bool bSuccess, const FString& ErrorMessage)
+{
+    (void)bSuccess;
+    (void)ErrorMessage;
+}
+
+void UMainMenuWidget::HandleRoomUpdated(const FRoomSummary& RoomSummary)
+{
+    (void)RoomSummary;
+}
+
+void UMainMenuWidget::HandleRoomStarted(bool bSuccess, const FString& Info)
+{
+    (void)bSuccess;
+    (void)Info;
+}
+
+void UMainMenuWidget::HandleRoomClosed(const FString& Reason)
+{
+    (void)Reason;
+}
+
+void UMainMenuWidget::HandleMatchQueueStatus(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage)
+{
+    (void)bSuccess;
+    (void)Status;
+    (void)ErrorMessage;
+}
+
 #endif

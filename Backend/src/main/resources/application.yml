@@ -11,3 +11,8 @@ spring:
   jackson:
     serialization:
       WRITE_DATES_AS_TIMESTAMPS: false
+
+game:
+  host:
+    address: 34.64.149.81
+    port: 7777

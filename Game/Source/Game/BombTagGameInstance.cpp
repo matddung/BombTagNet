@@ -15,6 +15,7 @@ namespace
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
     const TCHAR* DefaultBackendBaseUrl = TEXT("http://34.64.149.81:8080/api");
+    const TCHAR* DefaultMatchHostAddress = TEXT("34.64.149.81");
     constexpr int32 DefaultMatchPort = 7777;
 
     FString BuildGameModeOptionString(const UClass* GameModeClass, bool bListen)
@@ -241,7 +242,7 @@ void UBombTagGameInstance::StartHostedMatch()
     }
 
     const FString HostPlayerId = PendingMatchHostPlayerId;
-    const FString HostAddress = PendingMatchHostAddress;
+    const FString HostAddress = PendingMatchHostAddress.IsEmpty() ? FString(DefaultMatchHostAddress) : PendingMatchHostAddress;
     const int32 HostPort = PendingMatchHostPort > 0 ? PendingMatchHostPort : DefaultMatchPort;
 
     PendingMatchHostPlayerId.Reset();
@@ -541,7 +542,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
 void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort)
 {
     PendingMatchHostPlayerId = HostPlayer;
-    PendingMatchHostAddress = HostAddress;
+    PendingMatchHostAddress = HostAddress.IsEmpty() ? FString(DefaultMatchHostAddress) : HostAddress;
     PendingMatchHostPort = HostPort > 0 ? HostPort : DefaultMatchPort;
 }
 

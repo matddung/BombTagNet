@@ -1,5 +1,6 @@
 package com.BombTagNet.Backend.service;
 
+import com.BombTagNet.Backend.config.GameHostProperties;
 import com.BombTagNet.Backend.dao.Player;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
@@ -51,8 +52,13 @@ public class MatchService {
     private final AtomicInteger ticketSeq = new AtomicInteger(1);
     private final AtomicInteger matchSeq = new AtomicInteger(1);
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final GameHostProperties hostProperties;
 
     private PendingMatch pendingMatch;
+
+    public MatchService(GameHostProperties hostProperties) {
+        this.hostProperties = hostProperties;
+    }
 
     public MatchQueueStatus enqueue(String playerId, String nickname, String address) {
         long now = System.currentTimeMillis();
@@ -67,7 +73,7 @@ public class MatchService {
                 }
             }
 
-            MatchTicket ticket = new MatchTicket("t_" + ticketSeq.getAndIncrement(), new Player(playerId, nickname), address);
+            MatchTicket ticket = new MatchTicket("t_" + ticketSeq.getAndIncrement(), new Player(playerId, nickname), hostProperties.resolveAddress(address));
             ticketsById.put(ticket.ticketId, ticket);
             ticketsByPlayer.put(playerId, ticket);
 
@@ -209,7 +215,8 @@ public class MatchService {
         MatchTicket hostTicket = match.tickets.isEmpty() ? null : match.tickets.get(0);
         String hostPlayerId = hostTicket == null ? null : hostTicket.player.playerId();
         String hostAddress = hostTicket == null ? null : hostTicket.address;
-        int hostPort = 0;
+        hostAddress = hostProperties.resolveAddress(hostAddress);
+        int hostPort = hostProperties.getPort();
 
         MatchInfo info = new MatchInfo(match.matchId, players, hostPlayerId, hostAddress, hostPort);
 
@@ -254,6 +261,10 @@ public class MatchService {
                 hostPort = ticket.matchInfo.hostPort();
             }
         }
+
+        hostAddress = hostProperties.resolveAddress(hostAddress);
+        int resolvedPort = hostProperties.resolvePort(hostPort);
+        hostPort = resolvedPort;
 
         return new MatchQueueStatus(
                 ticket.ticketId,

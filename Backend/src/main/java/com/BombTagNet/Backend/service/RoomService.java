@@ -1,6 +1,7 @@
 package com.BombTagNet.Backend.service;
 
 import com.BombTagNet.Backend.common.RoomStatus;
+import com.BombTagNet.Backend.config.GameHostProperties;
 import com.BombTagNet.Backend.dao.Player;
 import com.BombTagNet.Backend.dao.Room;
 import org.springframework.stereotype.Service;
@@ -10,21 +11,37 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class RoomService {
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
+    private final AtomicInteger seq = new AtomicInteger(1);
+    private final GameHostProperties hostProperties;
+
+    public RoomService(GameHostProperties hostProperties) {
+        this.hostProperties = hostProperties;
+    }
 
     public Room create(String hostId, String name, int maxPlayers, String password, String hostAddress) {
         String roomId = normalizeRoomKey(name);
         String canonicalKey = toCanonicalKey(roomId);
         Room r = new Room(roomId, hostId, roomId, Math.max(2, Math.min(4, maxPlayers)), password);
-        r.updateHostEndpoint(hostAddress, 0);
+        r.updateHostEndpoint(hostProperties.resolveAddress(hostAddress), hostProperties.getPort());
         Room existing = rooms.putIfAbsent(canonicalKey, r);
         if (existing != null) {
             throw new IllegalStateException("ROOM_ALREADY_EXISTS");
         }
         return r;
+    }
+
+    public void updateHostEndpoint(Room room, String address, Integer port) {
+        if (room == null) {
+            return;
+        }
+        String resolvedAddress = hostProperties.resolveAddress(address);
+        int resolvedPort = hostProperties.resolvePort(port);
+        room.updateHostEndpoint(resolvedAddress, resolvedPort);
     }
 
     private String normalizeRoomKey(String name) {

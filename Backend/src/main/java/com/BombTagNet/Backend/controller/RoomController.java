@@ -1,6 +1,7 @@
 package com.BombTagNet.Backend.controller;
 
 import com.BombTagNet.Backend.common.PlayerRequestUtils;
+import com.BombTagNet.Backend.common.RequestIpUtils;
 import com.BombTagNet.Backend.dao.Player;
 import com.BombTagNet.Backend.dao.Room;
 import com.BombTagNet.Backend.dto.RoomDto.*;
@@ -25,8 +26,7 @@ public class RoomController {
     @PostMapping
     public ResponseEntity<RoomSummary> create(HttpServletRequest request, @RequestBody CreateRoomReq req) {
         String playerId = PlayerRequestUtils.requirePlayerId(request);
-        Room room = rooms.create(playerId, req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password(),
-                request == null ? null : request.getRemoteAddr());
+        Room room = rooms.create(playerId, req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password(), RequestIpUtils.resolveRemoteAddress(request));
         Player host = new Player(playerId, PlayerRequestUtils.resolveNickname(request));
         room.add(host);
         return ResponseEntity.ok(toSummary(room));
@@ -61,7 +61,7 @@ public class RoomController {
         Room room = requireRoom(roomId);
         rooms.start(room, PlayerRequestUtils.requirePlayerId(request), MIN_PLAYERS);
         if (request != null) {
-            room.updateHostEndpoint(request.getRemoteAddr(), room.hostPort());
+            rooms.updateHostEndpoint(room, RequestIpUtils.resolveRemoteAddress(request), null);
         }
         return ResponseEntity.ok().body(java.util.Map.of(
                 "matchId", "m_" + System.currentTimeMillis(),

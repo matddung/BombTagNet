@@ -141,4 +141,46 @@ void UResultEntryWidget::UpdatePlayerRecordText(int32 Win, int32 Lose, int32 Tot
     PlayerRecordText->SetText(RecordText);
 }
 
+#else
+
+void UResultEntryWidget::NativeConstruct()
+{
+}
+
+void UResultEntryWidget::NativeDestruct()
+{
+}
+
+FReply UResultEntryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+    (void)InGeometry;
+    (void)InMouseEvent;
+    return FReply::Unhandled();
+}
+
+FReply UResultEntryWidget::NativeOnTouchStarted(const FGeometry& InGeometry, const FPointerEvent& InTouchEvent)
+{
+    (void)InGeometry;
+    (void)InTouchEvent;
+    return FReply::Unhandled();
+}
+
+void UResultEntryWidget::GoToMenu()
+{
+}
+
+void UResultEntryWidget::HandlePlayerRecordUpdated(int32 Win, int32 Lose, int32 TotalMatches)
+{
+    (void)Win;
+    (void)Lose;
+    (void)TotalMatches;
+}
+
+void UResultEntryWidget::UpdatePlayerRecordText(int32 Win, int32 Lose, int32 TotalMatches)
+{
+    (void)Win;
+    (void)Lose;
+    (void)TotalMatches;
+}
+
 #endif

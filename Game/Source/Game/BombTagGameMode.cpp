@@ -15,6 +15,7 @@
 ABombTagGameMode::ABombTagGameMode()
 {
     GameStateClass = ABombTagStateBase::StaticClass();
+    PlayerControllerClass = ABombTagPlayerController::StaticClass();
 
     static ConstructorHelpers::FClassFinder<ABombTagCharacter> PlayerPawnBPClass(TEXT("/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter"));
     if (PlayerPawnBPClass.Succeeded())
@@ -25,17 +26,6 @@ ABombTagGameMode::ABombTagGameMode()
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to find default pawn class '/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter'. Falling back to ABombTagCharacter."));
         DefaultPawnClass = ABombTagCharacter::StaticClass();
-    }
-
-    static ConstructorHelpers::FClassFinder<ABombTagPlayerController> PlayerControllerBPClass(TEXT("/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController"));
-    if (PlayerControllerBPClass.Succeeded())
-    {
-        PlayerControllerClass = PlayerControllerBPClass.Class;
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to find player controller class '/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController'. Falling back to ABombTagPlayerController."));
-        PlayerControllerClass = ABombTagPlayerController::StaticClass();
     }
 
 #if !UE_SERVER

@@ -1,6 +1,7 @@
 package com.BombTagNet.Backend.controller;
 
 import com.BombTagNet.Backend.common.PlayerRequestUtils;
+import com.BombTagNet.Backend.common.RequestIpUtils;
 import com.BombTagNet.Backend.dto.MatchDto.MatchQueueStatusRes;
 import com.BombTagNet.Backend.dto.MatchDto.MatchResultReq;
 import com.BombTagNet.Backend.dto.MatchDto.OkRes;
@@ -39,8 +40,7 @@ public class MatchController {
     @PostMapping("/queue")
     public ResponseEntity<MatchQueueStatusRes> enqueue(HttpServletRequest request) {
         String playerId = PlayerRequestUtils.requirePlayerId(request);
-        MatchQueueStatus status = match.enqueue(playerId, PlayerRequestUtils.resolveNickname(request),
-                request == null ? null : request.getRemoteAddr());
+        MatchQueueStatus status = match.enqueue(playerId, PlayerRequestUtils.resolveNickname(request), RequestIpUtils.resolveRemoteAddress(request));
         return ResponseEntity.ok(toResponse(status));
     }
 
