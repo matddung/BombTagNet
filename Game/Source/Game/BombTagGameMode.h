@@ -31,6 +31,8 @@ protected:
     FBombTagMatchResultSnapshot BuildMatchResultSnapshot(const TSet<APlayerController*>& WinningControllers) const;
     void EvaluateMatchResultSubmissions();
     void FinalizeMatchResult(const FBombTagMatchResultSnapshot& Snapshot);
+    void ScheduleReturnToMenu();
+    void HandleReturnToMenu();
 
 public:
     UFUNCTION(BlueprintPure, Category = "Game")
@@ -59,4 +61,12 @@ protected:
     TMap<FString, int32> PendingMatchResultVotes;
     TSet<TWeakObjectPtr<ABombTagPlayerController>> PendingMatchParticipants;
     TSet<TWeakObjectPtr<ABombTagPlayerController>> RespondedMatchParticipants;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Match")
+    float ReturnToMenuDelay = 5.f; // 결과 연출 후 서버가 메뉴로 복귀하기까지의 지연 시간.
+
+    UPROPERTY(EditDefaultsOnly, Category = "Match")
+    FString MenuReturnURL = TEXT("/Game/Maps/MenuMap?game=/Game/Blueprints/BP_MenuGameMode.BP_MenuGameMode_C"); // 서버 전용 메뉴 복귀 목적지.
+
+    FTimerHandle ReturnToMenuTimerHandle;
 };

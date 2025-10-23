@@ -17,14 +17,16 @@ public class Game : ModuleRules
             "EnhancedInput",
             "HTTP",
             "Json",
-            "JsonUtilities"
+            "JsonUtilities",
+            "OnlineSubsystem",
+            "OnlineSubsystemUtils"
         });
 
         if (Target.Type != TargetType.Server)
         {
             PrivateDependencyModuleNames.AddRange(new string[]
             {
-                "UMG",
+                "UMG",                                 
                 "Slate",
                 "SlateCore"
             });

@@ -1,14 +1,20 @@
 #include "BombTagGameInstance.h"
 #include "BombTagSaveGame.h"
-#include "BombTagGameMode.h"
 #include "ApiClient.h"
 #include "RoomService.h"
+#include "BombTagPlayerController.h"
+#include "Game.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Engine/LocalPlayer.h"
+#include "Online/OnlineSessionNames.h"
+#include "OnlineSessionSettings.h"
+#include "OnlineSubsystem.h"
+#include "Interfaces/OnlineSessionInterface.h"
 
 namespace
 {
@@ -17,32 +23,7 @@ namespace
     const TCHAR* DefaultBackendBaseUrl = TEXT("http://34.64.149.81:8080/api");
     const TCHAR* DefaultMatchHostAddress = TEXT("34.64.149.81");
     constexpr int32 DefaultMatchPort = 7777;
-
-    FString BuildGameModeOptionString(const UClass* GameModeClass, bool bListen)
-    {
-        FString GameModeOption;
-
-        if (GameModeClass)
-        {
-            const FString ClassPath = GameModeClass->GetPathName();
-            if (!ClassPath.IsEmpty())
-            {
-                GameModeOption = FString::Printf(TEXT("game=%s"), *ClassPath);
-            }
-        }
-
-        if (bListen)
-        {
-            if (GameModeOption.IsEmpty())
-            {
-                return TEXT("listen");
-            }
-
-            return FString::Printf(TEXT("listen?%s"), *GameModeOption);
-        }
-
-        return GameModeOption;
-    }
+    const FName SessionSettingOwnerKey(TEXT("SETTING_OWNER"));
 
     bool IsBackendBaseUrlValid(FString& Url)
     {
@@ -217,7 +198,6 @@ void UBombTagGameInstance::ResetPlayerRecord()
     BroadcastPlayerRecord();
 }
 
-
 void UBombTagGameInstance::HostOnlineSession(const FString& SessionName, const FString& SessionPassword, int32 MaxPublicConnections, bool bIsLanMatch)
 {
     CurrentSessionName = SessionName.IsEmpty() ? TEXT("BombTag Session") : SessionName;
@@ -226,66 +206,64 @@ void UBombTagGameInstance::HostOnlineSession(const FString& SessionName, const F
     bCurrentIsLan = bIsLanMatch;
 
     UE_LOG(LogTemp, Log, TEXT("[Host] name='%s' pw='%s' max=%d lan=%d"), *CurrentSessionName, *CurrentSessionPassword, CurrentMaxPlayers, bCurrentIsLan ? 1 : 0);
+
+    IOnlineSubsystem* OnlineSubsystem = IOnlineSubsystem::Get();
+    if (!OnlineSubsystem)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] OnlineSubsystem not available; session metadata not published."));
+        return;
+    }
+
+    IOnlineSessionPtr SessionInterface = OnlineSubsystem->GetSessionInterface();
+    if (!SessionInterface.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Session interface invalid; session metadata not published."));
+        return;
+    }
+
+    FOnlineSessionSettings SessionSettings;
+    SessionSettings.NumPublicConnections = CurrentMaxPlayers;
+    SessionSettings.NumPrivateConnections = 0;
+    SessionSettings.bAllowJoinInProgress = true;
+    SessionSettings.bIsLANMatch = bCurrentIsLan;
+    SessionSettings.bShouldAdvertise = true;
+    SessionSettings.bUsesPresence = true;
+    SessionSettings.bAllowJoinViaPresence = true;
+    SessionSettings.bAllowJoinViaPresenceFriendsOnly = false;
+
+    const FString MapNameValue = TEXT("/Game/Maps/MainMap");
+    const FString GameModeValue = TEXT("BP_BombTagGameMode");
+    const FString OwnerValue = PlayerId.IsEmpty() ? FString(TEXT("UNKNOWN_HOST")) : PlayerId;
+
+    // 온라인 세션 브라우징 시 서버측 메타데이터가 노출되도록 ViaOnlineService로 광고한다.
+    SessionSettings.Set(SETTING_MAPNAME, MapNameValue, EOnlineDataAdvertisementType::ViaOnlineService);
+    SessionSettings.Set(SETTING_GAMEMODE, GameModeValue, EOnlineDataAdvertisementType::ViaOnlineService);
+    // 엔진 기본 키에 존재하지 않는 호스트 식별자는 별도 키를 명시적으로 정의해 사용한다.
+    SessionSettings.Set(SessionSettingOwnerKey, OwnerValue, EOnlineDataAdvertisementType::ViaOnlineService);
+    // 매치 로그에서도 동일 정보를 남겨 추적 가능하게 한다.
+    UE_LOG(LogTemp, Log, TEXT("[Match] Session metadata map=%s mode=%s owner=%s"), *MapNameValue, *GameModeValue, *OwnerValue);
+
+    if (!CurrentSessionPassword.IsEmpty())
+    {
+        SessionSettings.Set(TEXT("SESSION_PASSWORD"), CurrentSessionPassword, EOnlineDataAdvertisementType::DontAdvertise);
+    }
+
+    const ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
+    FUniqueNetIdPtr UserId = LocalPlayer ? LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId() : nullptr;
+
+    if (UserId.IsValid())
+    {
+        SessionInterface->CreateSession(*UserId, NAME_GameSession, SessionSettings);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Unable to resolve unique net id for host; session not created."));
+    }
 }
 
 void UBombTagGameInstance::FindAndJoinSession(const FString& SessionName, const FString& SessionPassword, bool /*bIsLanQuery*/)
 {
     UE_LOG(LogTemp, Log, TEXT("[Join] name='%s' pw='%s'"), *SessionName, *SessionPassword);
-}
-
-void UBombTagGameInstance::StartHostedMatch()
-{
-    if (MatchMapName.IsNone())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("MatchMapName is not set"));
-        return;
-    }
-
-    const FString HostPlayerId = PendingMatchHostPlayerId;
-    const FString HostAddress = PendingMatchHostAddress.IsEmpty() ? FString(DefaultMatchHostAddress) : PendingMatchHostAddress;
-    const int32 HostPort = PendingMatchHostPort > 0 ? PendingMatchHostPort : DefaultMatchPort;
-
-    PendingMatchHostPlayerId.Reset();
-    PendingMatchHostAddress.Reset();
-    PendingMatchHostPort = 0;
-
-    const bool bShouldHost = HostPlayerId.IsEmpty() || PlayerId.IsEmpty() || PlayerId.Equals(HostPlayerId, ESearchCase::CaseSensitive);
-
-    if (UWorld* World = GetWorld())
-    {
-        if (bShouldHost || World->GetNetMode() != NM_Client)
-        {
-            const FString Options = BuildGameModeOptionString(ABombTagGameMode::StaticClass(), true);
-            UE_LOG(LogTemp, Log, TEXT("Starting match as host (listen server)."));
-            UGameplayStatics::OpenLevel(World, MatchMapName, true, Options);
-            return;
-        }
-
-        if (!HostAddress.IsEmpty())
-        {
-            FString ConnectionString = HostAddress;
-            if (HostPort > 0)
-            {
-                ConnectionString = FString::Printf(TEXT("%s:%d"), *HostAddress, HostPort);
-            }
-
-            if (APlayerController* PC = World->GetFirstPlayerController())
-            {
-                UE_LOG(LogTemp, Log, TEXT("Joining match at %s as client (host=%s)."), *ConnectionString, *HostPlayerId);
-                PC->ClientTravel(ConnectionString, ETravelType::TRAVEL_Absolute);
-                return;
-            }
-
-            UE_LOG(LogTemp, Warning, TEXT("No PlayerController for client travel; loading match map locally."));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Host address missing; loading match map locally."));
-        }
-
-        const FString Options = BuildGameModeOptionString(ABombTagGameMode::StaticClass(), false);
-        UGameplayStatics::OpenLevel(World, MatchMapName, true, Options);
-    }
 }
 
 void UBombTagGameInstance::LeaveSession()
@@ -444,7 +422,8 @@ void UBombTagGameInstance::Backend_GetRoom()
             if (RoomSummary.Status.Equals(TEXT("STARTED"), ESearchCase::IgnoreCase) && !bRoomHasStarted)
             {
                 bRoomHasStarted = true;
-                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.HostAddress, RoomSummary.HostPort);
+                PendingMatchRoomId = RoomSummary.RoomId;
+                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.HostAddress, RoomSummary.HostPort, RoomSummary.StartToken);
                 OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
             }
         });
@@ -459,6 +438,8 @@ void UBombTagGameInstance::ResetCurrentSessionState()
     bCurrentIsLan = false;
     CurrentRoomId.Reset();
     bRoomHasStarted = false;
+    PendingMatchStartToken.Reset();
+    PendingMatchRoomId.Reset();
 }
 
 void UBombTagGameInstance::ResetMatchQueueState()
@@ -471,6 +452,8 @@ void UBombTagGameInstance::ResetMatchQueueState()
     PendingMatchHostPlayerId.Reset();
     PendingMatchHostAddress.Reset();
     PendingMatchHostPort = 0;
+    PendingMatchStartToken.Reset();
+    PendingMatchRoomId.Reset();
 }
 
 void UBombTagGameInstance::StartMatchQueuePolling()
@@ -518,8 +501,9 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
         if (!bMatchQueueLaunched)
         {
             bMatchQueueLaunched = true;
-            PrepareMatchLaunch(Status.HostPlayerId, Status.HostAddress, Status.HostPort);
-            StartHostedMatch();
+            PendingMatchRoomId = Status.MatchId;
+            PrepareMatchLaunch(Status.HostPlayerId, Status.HostAddress, Status.HostPort, Status.StartToken);
+            RequestServerMatchStart();
         }
         return;
     }
@@ -539,11 +523,12 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
     StartMatchQueuePolling();
 }
 
-void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort)
+void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort, const FString& StartToken)
 {
     PendingMatchHostPlayerId = HostPlayer;
     PendingMatchHostAddress = HostAddress.IsEmpty() ? FString(DefaultMatchHostAddress) : HostAddress;
     PendingMatchHostPort = HostPort > 0 ? HostPort : DefaultMatchPort;
+    PendingMatchStartToken = StartToken;
 }
 
 void UBombTagGameInstance::Backend_StartRoom()
@@ -573,7 +558,8 @@ void UBombTagGameInstance::Backend_StartRoom()
 
             UE_LOG(LogTemp, Log, TEXT("MatchId=%s host=%s address=%s port=%d"), *Info.MatchId, *Info.HostPlayerId, *Info.HostAddress, Info.HostPort);
             bRoomHasStarted = true;
-            PrepareMatchLaunch(Info.HostPlayerId, Info.HostAddress, Info.HostPort);
+            PendingMatchRoomId = Info.MatchId.IsEmpty() ? CurrentRoomId : Info.MatchId;
+            PrepareMatchLaunch(Info.HostPlayerId, Info.HostAddress, Info.HostPort, Info.StartToken);
             OnRoomStarted.Broadcast(true, Info.MatchId);
         });
 }
@@ -636,6 +622,40 @@ void UBombTagGameInstance::Backend_QueryMatchQueueStatus()
         {
             HandleMatchQueueStatusResult(bSuccess, Status, Error);
         });
+}
+
+void UBombTagGameInstance::RequestServerMatchStart()
+{
+    const FString RoomIdentifier = !PendingMatchRoomId.IsEmpty() ? PendingMatchRoomId : CurrentRoomId;
+
+    if (RoomIdentifier.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] RequestServerMatchStart skipped: no room or match identifier available."));
+        return;
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (APlayerController* PC = World->GetFirstPlayerController())
+        {
+            if (ABombTagPlayerController* BTPC = Cast<ABombTagPlayerController>(PC))
+            {
+                const FString HostId = GetEffectiveHostPlayerId();
+                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting server match start via RPC (room=%s host=%s)."), *RoomIdentifier, *HostId);
+                // 클라이언트 트래블 경로가 다시 호출되지 않도록 개발 단계에서 감시한다.
+                BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(RequestServerMatchStart);
+                BTPC->ServerRequestStartMatch(RoomIdentifier, PendingMatchStartToken);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] First player controller is not ABombTagPlayerController."));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] No player controller available for match start request."));
+        }
+    }
 }
 
 void UBombTagGameInstance::LoadOrCreatePlayerData()
@@ -714,4 +734,36 @@ bool UBombTagGameInstance::IsAsciiAlphanumeric(TCHAR Character) const
     return (Character >= '0' && Character <= '9') ||
         (Character >= 'A' && Character <= 'Z') ||
         (Character >= 'a' && Character <= 'z');
+}
+
+FString UBombTagGameInstance::GetEffectiveHostPlayerId() const
+{
+    if (!PendingMatchHostPlayerId.IsEmpty())
+    {
+        return PendingMatchHostPlayerId;
+    }
+
+    if (!PlayerId.IsEmpty())
+    {
+        return PlayerId;
+    }
+
+    if (!PlayerNickname.IsEmpty())
+    {
+        return PlayerNickname;
+    }
+
+    return FString(TEXT("UNKNOWN_HOST"));
+}
+
+void UBombTagGameInstance::Deprecated_ClientTravelToMatch()
+{
+    // 클라이언트 트래블 호출이 남아 있는지 감시용으로만 존재한다.
+    BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(Deprecated_ClientTravelToMatch);
+}
+
+void UBombTagGameInstance::Deprecated_ClientReturnToMenu()
+{
+    // 서버 주도 복귀를 강제하기 위한 감시용 스텁.
+    BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(Deprecated_ClientReturnToMenu);
 }

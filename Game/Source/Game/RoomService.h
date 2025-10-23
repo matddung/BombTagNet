@@ -49,6 +49,9 @@ struct GAME_API FRoomSummary
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
     TArray<FRoomPlayer> Players;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString StartToken;
 };
 
 USTRUCT(BlueprintType)
@@ -82,6 +85,9 @@ struct GAME_API FMatchStartInfo
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     int32 HostPort = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString StartToken;
 };
 
 UCLASS()

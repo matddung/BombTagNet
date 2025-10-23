@@ -321,6 +321,8 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
                 Info.HostPort = static_cast<int32>(HostPortValue);
             }
 
+            RootObject->TryGetStringField(TEXT("startToken"), Info.StartToken);
+
             if (Callback)
             {
                 Callback(true, Info, FString());
@@ -360,6 +362,8 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
     {
         OutSummary.HostPort = static_cast<int32>(HostPortValue);
     }
+
+    JsonObject->TryGetStringField(TEXT("startToken"), OutSummary.StartToken);
 
     ParseRoomPlayers(JsonObject, OutSummary.Players);
 

@@ -1,13 +1,11 @@
 #include "ResultEntryWidget.h"
 #include "BombTagPlayerController.h"
-#include "MenuGameMode.h"
 #include "BombTagGameInstance.h"
 
 #include "Components/TextBlock.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
-#include "Kismet/GameplayStatics.h"
 
 #if !UE_SERVER
 
@@ -106,22 +104,12 @@ FReply UResultEntryWidget::NativeOnTouchStarted(const FGeometry& InGeometry, con
 
 void UResultEntryWidget::GoToMenu()
 {
-    const FString MenuMapPath = TEXT("/Game/Maps/MenuMap");
-    const FString GameModePath = AMenuGameMode::StaticClass()->GetPathName();
-    const FString Options = GameModePath.IsEmpty()
-        ? FString()
-        : FString::Printf(TEXT("game=%s"), *GameModePath);
-    const FString TravelURL = Options.IsEmpty()
-        ? MenuMapPath
-        : FString::Printf(TEXT("%s?%s"), *MenuMapPath, *Options);
+    // 메뉴 복귀는 서버에서만 수행되므로, 사용자 입력은 대기 로그만 남긴다.
+    UE_LOG(LogTemp, Log, TEXT("[Match] Waiting for server-initiated return to menu."));
 
-    if (APlayerController* PC = GetOwningPlayer())
+    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
     {
-        PC->ClientTravel(TravelURL, TRAVEL_Absolute);
-    }
-    else if (UWorld* World = GetWorld())
-    {
-        UGameplayStatics::OpenLevel(World, FName(*MenuMapPath), true, Options);
+        GameInstance->Deprecated_ClientReturnToMenu();
     }
 }
 

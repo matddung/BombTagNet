@@ -53,6 +53,9 @@ struct GAME_API FMatchQueueStatus
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     int32 HostPort = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
+    FString StartToken;
 };
 
 UCLASS()

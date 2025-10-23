@@ -4,6 +4,7 @@
 #include "BombTagStateBase.h"
 #include "ResultEntryWidget.h"
 #include "BombTagGameMode.h"
+#include "MenuGameMode.h"
 
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
@@ -11,6 +12,9 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerState.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/NetDriver.h"
+#include "Engine/NetConnection.h"
 
 ABombTagPlayerController::ABombTagPlayerController()
 {
@@ -29,6 +33,10 @@ ABombTagPlayerController::ABombTagPlayerController()
 void ABombTagPlayerController::BeginPlay()
 {
     Super::BeginPlay();
+
+    const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
+    // 매치 흐름 디버깅을 위해 접속 시 현재 맵 정보를 남긴다.
+    UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s"), *CurrentMap);
 
 #if !UE_SERVER
     if (IsLocalPlayerController())
@@ -208,6 +216,40 @@ void ABombTagPlayerController::ClientRequestMatchResultSubmission_Implementation
 #endif
 }
 
+void ABombTagPlayerController::ClientLogServerEndpoint_Implementation(const FString& ExpectedAddress, int32 ExpectedPort)
+{
+#if !UE_SERVER
+    if (!IsLocalPlayerController())
+    {
+        return;
+    }
+
+    FString RemoteAddress(TEXT("UNKNOWN"));
+    if (const UWorld* World = GetWorld())
+    {
+        if (UNetDriver* NetDriver = World->GetNetDriver())
+        {
+            if (UNetConnection* Connection = NetDriver->ServerConnection)
+            {
+                RemoteAddress = Connection->LowLevelGetRemoteAddress(true);
+            }
+        }
+    }
+
+    FString ExpectedEndpoint(TEXT("UNSPECIFIED"));
+    if (!ExpectedAddress.IsEmpty() && ExpectedPort > 0)
+    {
+        ExpectedEndpoint = FString::Printf(TEXT("%s:%d"), *ExpectedAddress, ExpectedPort);
+    }
+    else if (!ExpectedAddress.IsEmpty())
+    {
+        ExpectedEndpoint = ExpectedAddress;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("[Match] ServerEndpointAudit remote=%s expected=%s"), *RemoteAddress, *ExpectedEndpoint);
+#endif
+}
+
 void ABombTagPlayerController::ServerSubmitMatchResultHash_Implementation(const FString& ResultHash, bool bClientAccepted)
 {
     if (ABombTagGameMode* GameMode = GetWorld()->GetAuthGameMode<ABombTagGameMode>())
@@ -228,6 +270,48 @@ void ABombTagPlayerController::ClientFinalizeMatchResult_Implementation(const FB
     {
         const EBombTagMatchResult MatchResult = bIsWinner ? EBombTagMatchResult::Win : EBombTagMatchResult::Lose;
         GameInstance->RecordMatchResult(MatchResult);
+    }
+#endif
+}
+
+void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FString& RoomId, const FString& StartToken)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (RoomId.IsEmpty())
+    {
+        // 방 정보 없이 호출되면 즉시 거부한다.
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch received without a room id."));
+        ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        return;
+    }
+
+    if (AMenuGameMode* MenuGameMode = GetWorld()->GetAuthGameMode<AMenuGameMode>())
+    {
+        // 메뉴 게임모드가 호스트 권한과 백엔드 토큰을 검증한 뒤 트래블을 수행한다.
+        MenuGameMode->HandleStartMatchRequest(this, RoomId, StartToken);
+    }
+    else
+    {
+        // 서버에서 메뉴 게임모드가 아닐 경우 안전하게 거부한다.
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch called but menu game mode not available."));
+        ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+    }
+}
+
+void ABombTagPlayerController::ClientNotifyMatchStartDenied_Implementation(const FString& ErrorCode)
+{
+    const FString& CodeToReport = ErrorCode.IsEmpty() ? FString(TEXT("MATCH_START_DENIED")) : ErrorCode;
+    // 거부 사유를 표준화된 로그 형식으로 남겨 분석 가능하게 한다.
+    UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: %s"), *CodeToReport);
+
+#if !UE_SERVER
+    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
+    {
+        GameInstance->OnRoomStarted.Broadcast(false, CodeToReport);
     }
 #endif
 }

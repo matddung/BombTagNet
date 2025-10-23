@@ -63,9 +63,6 @@ public:
     void FindAndJoinSession(const FString& SessionName, const FString& SessionPassword, bool bIsLanQuery);
 
     UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
-    void StartHostedMatch();
-
-    UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
     void LeaveSession();
 
     UFUNCTION(BlueprintCallable, Category = "Backend")
@@ -92,6 +89,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Backend")
     void Backend_QueryMatchQueueStatus();
 
+    UFUNCTION(BlueprintCallable, Category = "Backend")
+    void RequestServerMatchStart();
+
+    UFUNCTION(BlueprintCallable, Category = "Travel", meta = (DeprecatedFunction))
+    void Deprecated_ClientTravelToMatch();
+
+    UFUNCTION(BlueprintCallable, Category = "Travel", meta = (DeprecatedFunction))
+    void Deprecated_ClientReturnToMenu();
+
     UPROPERTY(BlueprintAssignable, Category = "Backend")
     FOnBackendLogin OnBackendLogin;
 
@@ -110,6 +116,16 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Backend")
     FOnMatchQueueStatus OnMatchQueueStatus;
 
+public:
+    FString GetCurrentRoomId() const { return CurrentRoomId; }
+    FString GetPendingMatchStartToken() const { return PendingMatchStartToken; }
+    FString GetPendingMatchHostPlayerId() const { return PendingMatchHostPlayerId; }
+    FString GetPendingMatchHostAddress() const { return PendingMatchHostAddress; }
+    int32 GetPendingMatchHostPort() const { return PendingMatchHostPort; }
+    FString GetLocalPlayerId() const { return PlayerId; }
+    FString GetPendingMatchRoomId() const { return PendingMatchRoomId; }
+    FString GetEffectiveHostPlayerId() const;
+
 private:
     void LoadOrCreatePlayerData();
     void SavePlayerData();
@@ -122,7 +138,7 @@ private:
     void StartMatchQueuePolling();
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
-    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort);
+    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort, const FString& StartToken);
     void BroadcastPlayerRecord();
 
 private:
@@ -157,6 +173,8 @@ private:
     FString PendingMatchHostPlayerId;
     FString PendingMatchHostAddress;
     int32 PendingMatchHostPort = 0;
+    FString PendingMatchStartToken;
+    FString PendingMatchRoomId;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName MatchMapName = FName(TEXT("/Game/Maps/MainMap"));

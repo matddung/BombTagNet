@@ -195,6 +195,8 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
         OutStatus.HostPort = static_cast<int32>(HostPortValue);
     }
 
+    JsonObject->TryGetStringField(TEXT("startToken"), OutStatus.StartToken);
+
     return true;
 }
 

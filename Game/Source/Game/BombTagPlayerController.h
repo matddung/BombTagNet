@@ -32,11 +32,20 @@ public:
     UFUNCTION(Client, Reliable)
     void ClientRequestMatchResultSubmission(const FBombTagMatchResultSnapshot& Snapshot);
 
+    UFUNCTION(Client, Reliable)
+    void ClientLogServerEndpoint(const FString& ExpectedAddress, int32 ExpectedPort);
+
     UFUNCTION(Server, Reliable)
     void ServerSubmitMatchResultHash(const FString& ResultHash, bool bClientAccepted);
 
     UFUNCTION(Client, Reliable)
     void ClientFinalizeMatchResult(const FBombTagMatchResultSnapshot& FinalSnapshot, bool bIsWinner);
+
+    UFUNCTION(Server, Reliable)
+    void ServerRequestStartMatch(const FString& RoomId, const FString& StartToken);
+
+    UFUNCTION(Client, Reliable)
+    void ClientNotifyMatchStartDenied(const FString& ErrorCode);
 	
 protected:
     virtual void BeginPlay() override;
