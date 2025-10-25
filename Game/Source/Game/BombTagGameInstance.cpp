@@ -22,6 +22,7 @@ namespace
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
     const TCHAR* DefaultBackendBaseUrl = TEXT("http://34.64.149.81:8080/api");
     const TCHAR* DefaultMatchHostAddress = TEXT("34.64.149.81");
+    const TCHAR* DefaultMatchHostInternalAddress = TEXT("10.178.0.2");
     constexpr int32 DefaultMatchPort = 7777;
     const FName SessionSettingOwnerKey(TEXT("SETTING_OWNER"));
 
@@ -74,6 +75,10 @@ void UBombTagGameInstance::Init()
 
     float TimeoutSec = 10.0f;
     GConfig->GetFloat(TEXT("Game.Net"), TEXT("HttpTimeoutSec"), TimeoutSec, GGameIni);
+
+    bool bPreferInternal = false;
+    GConfig->GetBool(TEXT("Game.Net"), TEXT("bPreferInternalHostAddress"), bPreferInternal, GGameIni);
+    bPreferInternalHostAddress = bPreferInternal;
 
     Api = NewObject<UApiClient>(this);
     if (Api)
@@ -423,7 +428,7 @@ void UBombTagGameInstance::Backend_GetRoom()
             {
                 bRoomHasStarted = true;
                 PendingMatchRoomId = RoomSummary.RoomId;
-                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.HostAddress, RoomSummary.HostPort, RoomSummary.StartToken);
+                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.HostAddress, RoomSummary.HostInternalAddress, RoomSummary.HostPort, RoomSummary.StartToken);
                 OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
             }
         });
@@ -451,6 +456,7 @@ void UBombTagGameInstance::ResetMatchQueueState()
     bMatchQueueLaunched = false;
     PendingMatchHostPlayerId.Reset();
     PendingMatchHostAddress.Reset();
+    PendingMatchHostInternalAddress.Reset();
     PendingMatchHostPort = 0;
     PendingMatchStartToken.Reset();
     PendingMatchRoomId.Reset();
@@ -502,7 +508,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
         {
             bMatchQueueLaunched = true;
             PendingMatchRoomId = Status.MatchId;
-            PrepareMatchLaunch(Status.HostPlayerId, Status.HostAddress, Status.HostPort, Status.StartToken);
+            PrepareMatchLaunch(Status.HostPlayerId, Status.HostAddress, Status.HostInternalAddress, Status.HostPort, Status.StartToken);
             RequestServerMatchStart();
         }
         return;
@@ -523,12 +529,76 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
     StartMatchQueuePolling();
 }
 
-void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort, const FString& StartToken)
+void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken)
 {
     PendingMatchHostPlayerId = HostPlayer;
-    PendingMatchHostAddress = HostAddress.IsEmpty() ? FString(DefaultMatchHostAddress) : HostAddress;
+
+    FString PublicAddress = HostAddress;
+    PublicAddress.TrimStartAndEndInline();
+
+    FString InternalAddress = HostInternalAddress;
+    InternalAddress.TrimStartAndEndInline();
+
+    PendingMatchHostInternalAddress = InternalAddress;
+
+    const FString SelectedAddress = ChooseMatchHostAddress(HostPlayer, PublicAddress, InternalAddress);
+    PendingMatchHostAddress = SelectedAddress.IsEmpty() ? FString(DefaultMatchHostAddress) : SelectedAddress;
+
+    if (PendingMatchHostInternalAddress.IsEmpty() && PendingMatchHostAddress.Equals(DefaultMatchHostInternalAddress, ESearchCase::IgnoreCase))
+    {
+        PendingMatchHostInternalAddress = FString(DefaultMatchHostInternalAddress);
+    }
+
     PendingMatchHostPort = HostPort > 0 ? HostPort : DefaultMatchPort;
     PendingMatchStartToken = StartToken;
+}
+
+FString UBombTagGameInstance::ChooseMatchHostAddress(const FString& HostPlayer, const FString& HostPublicAddress, const FString& HostInternalAddress) const
+{
+    FString PublicAddress = HostPublicAddress;
+    PublicAddress.TrimStartAndEndInline();
+
+    FString InternalAddress = HostInternalAddress;
+    InternalAddress.TrimStartAndEndInline();
+
+    bool bUseInternal = false;
+    if (!InternalAddress.IsEmpty())
+    {
+        const FString LocalPlayerId = GetLocalPlayerId();
+        if (!HostPlayer.IsEmpty() && !LocalPlayerId.IsEmpty() && HostPlayer.Equals(LocalPlayerId, ESearchCase::IgnoreCase))
+        {
+            bUseInternal = true;
+        }
+        else if (bPreferInternalHostAddress)
+        {
+            bUseInternal = true;
+        }
+    }
+
+    if (bUseInternal)
+    {
+        if (!InternalAddress.IsEmpty())
+        {
+            return InternalAddress;
+        }
+        if (!PublicAddress.IsEmpty())
+        {
+            return PublicAddress;
+        }
+        return FString(DefaultMatchHostInternalAddress);
+    }
+
+    if (!PublicAddress.IsEmpty())
+    {
+        return PublicAddress;
+    }
+
+    if (!InternalAddress.IsEmpty())
+    {
+        return InternalAddress;
+    }
+
+    return FString(DefaultMatchHostAddress);
 }
 
 void UBombTagGameInstance::Backend_StartRoom()
@@ -556,10 +626,10 @@ void UBombTagGameInstance::Backend_StartRoom()
                 return;
             }
 
-            UE_LOG(LogTemp, Log, TEXT("MatchId=%s host=%s address=%s port=%d"), *Info.MatchId, *Info.HostPlayerId, *Info.HostAddress, Info.HostPort);
+            UE_LOG(LogTemp, Log, TEXT("MatchId=%s host=%s public=%s internal=%s port=%d"), *Info.MatchId, *Info.HostPlayerId, *Info.HostAddress, *Info.HostInternalAddress, Info.HostPort);
             bRoomHasStarted = true;
             PendingMatchRoomId = Info.MatchId.IsEmpty() ? CurrentRoomId : Info.MatchId;
-            PrepareMatchLaunch(Info.HostPlayerId, Info.HostAddress, Info.HostPort, Info.StartToken);
+            PrepareMatchLaunch(Info.HostPlayerId, Info.HostAddress, Info.HostInternalAddress, Info.HostPort, Info.StartToken);
             OnRoomStarted.Broadcast(true, Info.MatchId);
         });
 }

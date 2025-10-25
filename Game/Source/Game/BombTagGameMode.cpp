@@ -3,45 +3,12 @@
 #include "BombTagCharacter.h"
 #include "BombTagPlayerController.h"
 #include "BombTagGameInstance.h"
+#include "GameModeTravelUtils.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
-
-namespace
-{
-    void ExtractTravelTargets(const FString& URL, FString& OutMap, FString& OutGameMode)
-    {
-        // ServerTravel에 전달하는 URL에서 맵 경로와 게임모드 파라미터를 분리한다.
-        OutMap = URL;
-        OutGameMode.Reset();
-
-        FString MapPart;
-        FString Options;
-        if (URL.Split(TEXT("?"), &MapPart, &Options))
-        {
-            OutMap = MapPart;
-            const FString GameModeOption = UGameplayStatics::ParseOption(Options, TEXT("game"));
-            if (!GameModeOption.IsEmpty())
-            {
-                OutGameMode = GameModeOption;
-            }
-        }
-    }
-
-    FString ResolveHostId(const UBombTagGameInstance* GameInstance)
-    {
-        // 매치 로그에 일관된 호스트 식별자를 남기기 위한 보조 함수.
-        if (!GameInstance)
-        {
-            return FString(TEXT("UNKNOWN_HOST"));
-        }
-
-        const FString HostId = GameInstance->GetEffectiveHostPlayerId();
-        return HostId.IsEmpty() ? FString(TEXT("UNKNOWN_HOST")) : HostId;
-    }
-}
 
 #if !UE_SERVER
 #include "ResultEntryWidget.h"
@@ -76,7 +43,7 @@ void ABombTagGameMode::BeginPlay()
 {
     Super::BeginPlay();
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
-    const FString OwnerId = ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
+    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
     // 매치 시작 시점에 맵/게임모드/시즌리스 설정을 모두 로그로 남겨 추적한다.
     UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s Owner=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *OwnerId);
     BeginStartCountdown();
@@ -396,10 +363,10 @@ void ABombTagGameMode::HandleReturnToMenu()
 
     FString MapName;
     FString GameModePath;
-    ExtractTravelTargets(MenuReturnURL, MapName, GameModePath);
+    BombTag::GameMode::ExtractTravelTargets(MenuReturnURL, MapName, GameModePath);
     bUseSeamlessTravel = true;
 
-    const FString OwnerId = ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
+    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
     // 서버만이 트래블을 수행하며, 동일한 포맷으로 로그를 남겨 클라이언트 추종 여부를 검증한다.
     UE_LOG(LogTemp, Log, TEXT("[Match] ServerTravel to %s (Map=%s GameMode=%s Owner=%s Seamless=%s)"), *MenuReturnURL, *MapName, *GameModePath, *OwnerId, bUseSeamlessTravel ? TEXT("true") : TEXT("false"));
 

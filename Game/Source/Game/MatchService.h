@@ -52,6 +52,9 @@ struct GAME_API FMatchQueueStatus
     FString HostAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
+    FString HostInternalAddress;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     int32 HostPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")

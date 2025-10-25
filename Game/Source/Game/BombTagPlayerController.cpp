@@ -285,7 +285,7 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
     {
         // 방 정보 없이 호출되면 즉시 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch received without a room id."));
-        ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 1"));
         return;
     }
 
@@ -298,13 +298,13 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
     {
         // 서버에서 메뉴 게임모드가 아닐 경우 안전하게 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch called but menu game mode not available."));
-        ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 2"));
     }
 }
 
 void ABombTagPlayerController::ClientNotifyMatchStartDenied_Implementation(const FString& ErrorCode)
 {
-    const FString& CodeToReport = ErrorCode.IsEmpty() ? FString(TEXT("MATCH_START_DENIED")) : ErrorCode;
+    const FString& CodeToReport = ErrorCode.IsEmpty() ? FString(TEXT("MATCH_START_DENIED 3")) : ErrorCode;
     // 거부 사유를 표준화된 로그 형식으로 남겨 분석 가능하게 한다.
     UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: %s"), *CodeToReport);
 

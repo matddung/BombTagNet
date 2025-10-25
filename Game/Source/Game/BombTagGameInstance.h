@@ -121,6 +121,7 @@ public:
     FString GetPendingMatchStartToken() const { return PendingMatchStartToken; }
     FString GetPendingMatchHostPlayerId() const { return PendingMatchHostPlayerId; }
     FString GetPendingMatchHostAddress() const { return PendingMatchHostAddress; }
+    FString GetPendingMatchHostInternalAddress() const { return PendingMatchHostInternalAddress; }
     int32 GetPendingMatchHostPort() const { return PendingMatchHostPort; }
     FString GetLocalPlayerId() const { return PlayerId; }
     FString GetPendingMatchRoomId() const { return PendingMatchRoomId; }
@@ -139,6 +140,8 @@ private:
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
     void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort, const FString& StartToken);
+    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken);
+    FString ChooseMatchHostAddress(const FString& HostPlayer, const FString& HostPublicAddress, const FString& HostInternalAddress) const;
     void BroadcastPlayerRecord();
 
 private:
@@ -172,9 +175,11 @@ private:
 
     FString PendingMatchHostPlayerId;
     FString PendingMatchHostAddress;
+    FString PendingMatchHostInternalAddress;
     int32 PendingMatchHostPort = 0;
     FString PendingMatchStartToken;
     FString PendingMatchRoomId;
+    bool bPreferInternalHostAddress = false;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName MatchMapName = FName(TEXT("/Game/Maps/MainMap"));

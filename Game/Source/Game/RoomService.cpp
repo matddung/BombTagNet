@@ -314,6 +314,7 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
             Info.MatchId = MatchId;
             RootObject->TryGetStringField(TEXT("hostPlayerId"), Info.HostPlayerId);
             RootObject->TryGetStringField(TEXT("hostAddress"), Info.HostAddress);
+            RootObject->TryGetStringField(TEXT("hostInternalAddress"), Info.HostInternalAddress);
 
             double HostPortValue = 0.0;
             if (RootObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))
@@ -356,6 +357,7 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
 
     JsonObject->TryGetStringField(TEXT("hostId"), OutSummary.HostId);
     JsonObject->TryGetStringField(TEXT("hostAddress"), OutSummary.HostAddress);
+    JsonObject->TryGetStringField(TEXT("hostInternalAddress"), OutSummary.HostInternalAddress);
 
     double HostPortValue = 0.0;
     if (JsonObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))

@@ -1,6 +1,7 @@
 #include "MenuGameMode.h"
 #include "BombTagPlayerController.h"
 #include "BombTagGameInstance.h"
+#include "GameModeTravelUtils.h"
 
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerState.h"
@@ -10,37 +11,6 @@
 
 namespace
 {
-    void ExtractTravelTargets(const FString& URL, FString& OutMap, FString& OutGameMode)
-    {
-        // 매치/메뉴 트래블 URL에서 맵과 게임모드 정보를 분리한다.
-        OutMap = URL;
-        OutGameMode.Reset();
-
-        FString MapPart;
-        FString Options;
-        if (URL.Split(TEXT("?"), &MapPart, &Options))
-        {
-            OutMap = MapPart;
-            const FString GameModeOption = UGameplayStatics::ParseOption(Options, TEXT("game"));
-            if (!GameModeOption.IsEmpty())
-            {
-                OutGameMode = GameModeOption;
-            }
-        }
-    }
-
-    FString ResolveHostId(const UBombTagGameInstance* GameInstance)
-    {
-        // 매치 로그를 일관되게 남기기 위한 호스트 식별자 추출.
-        if (!GameInstance)
-        {
-            return FString(TEXT("UNKNOWN_HOST"));
-        }
-
-        const FString HostId = GameInstance->GetEffectiveHostPlayerId();
-        return HostId.IsEmpty() ? FString(TEXT("UNKNOWN_HOST")) : HostId;
-    }
-
     FString BuildEndpointLabel(const FString& Host, int32 Port)
     {
         if (Host.IsEmpty())
@@ -71,7 +41,7 @@ void AMenuGameMode::BeginPlay()
     Super::BeginPlay();
 
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
-    const FString OwnerId = ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
+    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
     // 로비 진입 시 현재 맵/게임모드/시즌리스 설정을 로그로 남긴다.
     UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s Owner=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *OwnerId);
 }
@@ -109,7 +79,7 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
     {
         // 방 식별자가 없으면 요청을 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start request missing room id."));
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 4"));
         return;
     }
 
@@ -117,7 +87,7 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
     {
         // 방장이 아닌 경우 서버에서 거부하고 경고 로그를 남긴다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Controller %s lacks host permissions for match start."), *GetNameSafe(RequestingController));
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 5"));
         return;
     }
 
@@ -126,7 +96,7 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
     {
         // 백엔드 검증이 실패하면 세부 코드와 함께 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend verification failed: %s"), *VerificationError);
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 6"));
         return;
     }
 
@@ -141,7 +111,7 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
     if (ExpectedHost.IsEmpty() || ExpectedPort <= 0)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing host endpoint data (host=%s port=%d)."), *ExpectedHost, ExpectedPort);
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 7"));
         return;
     }
 
@@ -150,7 +120,7 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
     {
         const FString ExpectedEndpoint = BuildEndpointLabel(ExpectedHost, ExpectedPort);
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: server endpoint mismatch expected=%s actual=%s."), *ExpectedEndpoint, *ActualEndpoint);
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED"));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 8"));
         return;
     }
 
@@ -170,10 +140,10 @@ void AMenuGameMode::StartMatchTravel()
 
     FString MapName;
     FString GameModePath;
-    ExtractTravelTargets(MatchTravelURL, MapName, GameModePath);
+    BombTag::GameMode::ExtractTravelTargets(MatchTravelURL, MapName, GameModePath);
     bUseSeamlessTravel = true;
 
-    const FString OwnerId = ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
+    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
     // 서버 전용 트래블 실행과 함께 표준화된 로그를 남긴다.
     UE_LOG(LogTemp, Log, TEXT("[Match] ServerTravel to %s (Map=%s GameMode=%s Owner=%s Seamless=%s)"), *MatchTravelURL, *MapName, *GameModePath, *OwnerId, bUseSeamlessTravel ? TEXT("true") : TEXT("false"));
     GetWorld()->ServerTravel(MatchTravelURL, true);

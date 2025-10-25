@@ -36,6 +36,9 @@ struct GAME_API FRoomSummary
     FString HostAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString HostInternalAddress;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
     int32 HostPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
@@ -82,6 +85,9 @@ struct GAME_API FMatchStartInfo
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString HostAddress;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString HostInternalAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     int32 HostPort = 0;
