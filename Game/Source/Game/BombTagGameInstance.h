@@ -125,6 +125,7 @@ public:
     int32 GetPendingMatchHostPort() const { return PendingMatchHostPort; }
     FString GetLocalPlayerId() const { return PlayerId; }
     FString GetPendingMatchRoomId() const { return PendingMatchRoomId; }
+    FString GetPendingMatchTravelURL() const;
     FString GetEffectiveHostPlayerId() const;
 
 private:

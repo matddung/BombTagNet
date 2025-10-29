@@ -13,8 +13,6 @@
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
-#include "Engine/NetDriver.h"
-#include "Engine/NetConnection.h"
 
 ABombTagPlayerController::ABombTagPlayerController()
 {
@@ -213,40 +211,6 @@ void ABombTagPlayerController::ClientRequestMatchResultSubmission_Implementation
     {
         UE_LOG(LogTemp, Warning, TEXT("Client %s rejected match snapshot and reported hash %s"), *GetName(), *ResultHash);
     }
-#endif
-}
-
-void ABombTagPlayerController::ClientLogServerEndpoint_Implementation(const FString& ExpectedAddress, int32 ExpectedPort)
-{
-#if !UE_SERVER
-    if (!IsLocalPlayerController())
-    {
-        return;
-    }
-
-    FString RemoteAddress(TEXT("UNKNOWN"));
-    if (const UWorld* World = GetWorld())
-    {
-        if (UNetDriver* NetDriver = World->GetNetDriver())
-        {
-            if (UNetConnection* Connection = NetDriver->ServerConnection)
-            {
-                RemoteAddress = Connection->LowLevelGetRemoteAddress(true);
-            }
-        }
-    }
-
-    FString ExpectedEndpoint(TEXT("UNSPECIFIED"));
-    if (!ExpectedAddress.IsEmpty() && ExpectedPort > 0)
-    {
-        ExpectedEndpoint = FString::Printf(TEXT("%s:%d"), *ExpectedAddress, ExpectedPort);
-    }
-    else if (!ExpectedAddress.IsEmpty())
-    {
-        ExpectedEndpoint = ExpectedAddress;
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("[Match] ServerEndpointAudit remote=%s expected=%s"), *RemoteAddress, *ExpectedEndpoint);
 #endif
 }
 

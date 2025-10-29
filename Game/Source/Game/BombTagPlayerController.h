@@ -32,9 +32,6 @@ public:
     UFUNCTION(Client, Reliable)
     void ClientRequestMatchResultSubmission(const FBombTagMatchResultSnapshot& Snapshot);
 
-    UFUNCTION(Client, Reliable)
-    void ClientLogServerEndpoint(const FString& ExpectedAddress, int32 ExpectedPort);
-
     UFUNCTION(Server, Reliable)
     void ServerSubmitMatchResultHash(const FString& ResultHash, bool bClientAccepted);
 

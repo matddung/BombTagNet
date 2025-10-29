@@ -4,10 +4,9 @@
 #include "GameModeTravelUtils.h"
 
 #include "Blueprint/UserWidget.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
-#include "Engine/NetDriver.h"
-#include "Engine/NetConnection.h"
 
 namespace
 {
@@ -42,7 +41,6 @@ void AMenuGameMode::BeginPlay()
 
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
     const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
-    // 로비 진입 시 현재 맵/게임모드/시즌리스 설정을 로그로 남긴다.
     UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s Owner=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *OwnerId);
 }
 
@@ -70,14 +68,12 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
 
     if (!RequestingController)
     {
-        // 컨트롤러가 유효하지 않다면 더 진행하지 않는다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Null controller attempted to request match start."));
         return;
     }
 
     if (RoomId.IsEmpty())
     {
-        // 방 식별자가 없으면 요청을 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start request missing room id."));
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 4"));
         return;
@@ -85,7 +81,6 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
 
     if (!HasHostAuthority(RequestingController))
     {
-        // 방장이 아닌 경우 서버에서 거부하고 경고 로그를 남긴다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Controller %s lacks host permissions for match start."), *GetNameSafe(RequestingController));
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 5"));
         return;
@@ -94,7 +89,6 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
     FString VerificationError;
     if (!VerifyWithBackend(RoomId, StartToken, VerificationError))
     {
-        // 백엔드 검증이 실패하면 세부 코드와 함께 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend verification failed: %s"), *VerificationError);
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 6"));
         return;
@@ -102,51 +96,50 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
 
     FString ExpectedHost;
     int32 ExpectedPort = 0;
+    FString TravelURL;
     if (const UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
     {
         ExpectedHost = GameInstance->GetPendingMatchHostAddress();
         ExpectedPort = GameInstance->GetPendingMatchHostPort();
+        TravelURL = GameInstance->GetPendingMatchTravelURL();
     }
 
-    if (ExpectedHost.IsEmpty() || ExpectedPort <= 0)
+    if (ExpectedHost.IsEmpty() || ExpectedPort <= 0 || TravelURL.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing host endpoint data (host=%s port=%d)."), *ExpectedHost, ExpectedPort);
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (host=%s port=%d url=%s)."), *ExpectedHost, ExpectedPort, *TravelURL);
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 7"));
         return;
     }
 
-    FString ActualEndpoint;
-    if (!ValidateServerInstance(ExpectedHost, ExpectedPort, ActualEndpoint))
-    {
-        const FString ExpectedEndpoint = BuildEndpointLabel(ExpectedHost, ExpectedPort);
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: server endpoint mismatch expected=%s actual=%s."), *ExpectedEndpoint, *ActualEndpoint);
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 8"));
-        return;
-    }
+    const FString EndpointLabel = BuildEndpointLabel(ExpectedHost, ExpectedPort);
+    UE_LOG(LogTemp, Log, TEXT("[Match] Host %s approved match start for room %s. Directing clients to %s."), *GetNameSafe(RequestingController), *RoomId, *EndpointLabel);
 
-    UE_LOG(LogTemp, Log, TEXT("[Match] Host %s approved match start for room %s."), *GetNameSafe(RequestingController), *RoomId);
-    BroadcastServerEndpointAudit(ExpectedHost, ExpectedPort);
-    StartMatchTravel();
+    SendClientsToMatch(TravelURL);
 }
 
-void AMenuGameMode::StartMatchTravel()
+void AMenuGameMode::SendClientsToMatch(const FString& TravelURL)
 {
-    if (MatchTravelURL.IsEmpty())
+    if (TravelURL.IsEmpty())
     {
-        // 설정이 빠져 있으면 서버 트래블을 시도하지 않는다.
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] MatchTravelURL is empty; cannot travel to match map."));
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] SendClientsToMatch skipped: travel url is empty."));
         return;
     }
 
-    FString MapName;
-    FString GameModePath;
-    BombTag::GameMode::ExtractTravelTargets(MatchTravelURL, MapName, GameModePath);
-    bUseSeamlessTravel = true;
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] SendClientsToMatch skipped: world not available."));
+        return;
+    }
 
-    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
-    // 서버 전용 트래블 실행과 함께 표준화된 로그를 남긴다.
-    UE_LOG(LogTemp, Log, TEXT("[Match] ServerTravel to %s (Map=%s GameMode=%s Owner=%s Seamless=%s)"), *MatchTravelURL, *MapName, *GameModePath, *OwnerId, bUseSeamlessTravel ? TEXT("true") : TEXT("false"));
-    GetWorld()->ServerTravel(MatchTravelURL, true);
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (APlayerController* PC = It->Get())
+        {
+            UE_LOG(LogTemp, Log, TEXT("[Match] Instructing %s to travel to %s."), *GetNameSafe(PC), *TravelURL);
+            PC->ClientTravel(TravelURL, ETravelType::TRAVEL_Absolute);
+        }
+    }
 }
 
 bool AMenuGameMode::HasHostAuthority(const ABombTagPlayerController* RequestingController) const
@@ -158,7 +151,6 @@ bool AMenuGameMode::HasHostAuthority(const ABombTagPlayerController* RequestingC
 
     if (RequestingController->IsLocalController())
     {
-        // 데디케이티드 서버 환경에서는 호스트가 로컬 컨트롤러로 접속하지 않지만, 에디터 테스트 시를 위해 허용한다.
         return true;
     }
 
@@ -171,7 +163,6 @@ bool AMenuGameMode::HasHostAuthority(const ABombTagPlayerController* RequestingC
             {
                 if (PlayerState->GetPlayerName().Equals(HostPlayerId, ESearchCase::IgnoreCase))
                 {
-                    // 백엔드가 지정한 호스트 ID와 일치하면 권한 부여.
                     return true;
                 }
             }
@@ -204,97 +195,4 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     }
 
     return true;
-}
-
-bool AMenuGameMode::ValidateServerInstance(const FString& ExpectedAddress, int32 ExpectedPort, FString& OutActualEndpoint) const
-{
-    OutActualEndpoint = TEXT("NO_WORLD");
-
-    const UWorld* World = GetWorld();
-    if (!World)
-    {
-        return false;
-    }
-
-    OutActualEndpoint = TEXT("NO_NETDRIVER");
-    UNetDriver* NetDriver = World->GetNetDriver();
-    if (!NetDriver)
-    {
-        return false;
-    }
-
-    if (NetDriver->ServerConnection)
-    {
-        OutActualEndpoint = NetDriver->ServerConnection->LowLevelDescribe();
-    }
-    else
-    {
-        OutActualEndpoint = FString::Printf(TEXT("%s:%d"), *NetDriver->LocalAddr->ToString(false), NetDriver->LocalAddr->GetPort());
-    }
-
-    if (ExpectedAddress.IsEmpty() || ExpectedPort <= 0)
-    {
-        return false;
-    }
-
-    const bool bMatchesAddress = OutActualEndpoint.Contains(ExpectedAddress, ESearchCase::IgnoreCase);
-    const FString ExpectedPortSuffix = FString::Printf(TEXT(":%d"), ExpectedPort);
-    const bool bMatchesPort = OutActualEndpoint.EndsWith(ExpectedPortSuffix, ESearchCase::IgnoreCase);
-
-    return bMatchesAddress && bMatchesPort;
-}
-
-void AMenuGameMode::BroadcastServerEndpointAudit(const FString& ExpectedAddress, int32 ExpectedPort) const
-{
-    const UWorld* World = GetWorld();
-    if (!World)
-    {
-        return;
-    }
-
-    const FString ExpectedEndpoint = BuildEndpointLabel(ExpectedAddress, ExpectedPort);
-
-    if (UNetDriver* NetDriver = World->GetNetDriver())
-    {
-        FString LocalEndpoint = TEXT("Unknown");
-
-        if (NetDriver->ServerConnection)
-        {
-            LocalEndpoint = NetDriver->ServerConnection->LowLevelDescribe();
-        }
-        else if (NetDriver->LocalAddr.IsValid())
-        {
-            LocalEndpoint = FString::Printf(
-                TEXT("%s:%d"),
-                *NetDriver->LocalAddr->ToString(false),
-                NetDriver->LocalAddr->GetPort()
-            );
-        }
-        else
-        {
-            const FURL& URL = World->URL;
-            LocalEndpoint = FString::Printf(TEXT("%s:%d"), *URL.Host, URL.Port);
-        }
-
-        UE_LOG(LogTemp, Log, TEXT("[Match] ServerEndpointAudit local=%s expected=%s"), *LocalEndpoint, *ExpectedEndpoint);
-    }
-
-    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
-    {
-        if (APlayerController* PC = It->Get())
-        {
-            FString RemoteEndpoint(TEXT("UNKNOWN"));
-            if (UNetConnection* Connection = PC->NetConnection)
-            {
-                RemoteEndpoint = Connection->LowLevelGetRemoteAddress(true);
-            }
-
-            UE_LOG(LogTemp, Log, TEXT("[Match] ClientEndpointAudit remote=%s player=%s expectedServer=%s"), *RemoteEndpoint, *GetNameSafe(PC), *ExpectedEndpoint);
-
-            if (ABombTagPlayerController* BombTagPC = Cast<ABombTagPlayerController>(PC))
-            {
-                BombTagPC->ClientLogServerEndpoint(ExpectedAddress, ExpectedPort);
-            }
-        }
-    }
 }

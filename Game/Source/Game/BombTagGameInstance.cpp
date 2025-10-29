@@ -553,6 +553,44 @@ void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const F
     PendingMatchStartToken = StartToken;
 }
 
+FString UBombTagGameInstance::GetPendingMatchTravelURL() const
+{
+    FString HostAddress = PendingMatchHostAddress;
+    HostAddress.TrimStartAndEndInline();
+
+    if (HostAddress.IsEmpty())
+    {
+        return FString();
+    }
+
+    FString TravelURL = HostAddress;
+    if (PendingMatchHostPort > 0)
+    {
+        TravelURL = FString::Printf(TEXT("%s:%d"), *HostAddress, PendingMatchHostPort);
+    }
+
+    TArray<FString> Options;
+
+    const FString MatchIdentifier = !PendingMatchRoomId.IsEmpty() ? PendingMatchRoomId : CurrentRoomId;
+    if (!MatchIdentifier.IsEmpty())
+    {
+        Options.Add(FString::Printf(TEXT("matchId=%s"), *MatchIdentifier));
+    }
+
+    if (!PendingMatchStartToken.IsEmpty())
+    {
+        Options.Add(FString::Printf(TEXT("startToken=%s"), *PendingMatchStartToken));
+    }
+
+    if (!Options.IsEmpty())
+    {
+        TravelURL.AppendChar('?');
+        TravelURL.Append(FString::Join(Options, TEXT("&")));
+    }
+
+    return TravelURL;
+}
+
 FString UBombTagGameInstance::ChooseMatchHostAddress(const FString& HostPlayer, const FString& HostPublicAddress, const FString& HostInternalAddress) const
 {
     FString PublicAddress = HostPublicAddress;
@@ -704,6 +742,13 @@ void UBombTagGameInstance::RequestServerMatchStart()
         return;
     }
 
+    const FString TravelURL = GetPendingMatchTravelURL();
+    if (TravelURL.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] RequestServerMatchStart skipped: match server endpoint unavailable."));
+        return;
+    }
+
     if (UWorld* World = GetWorld())
     {
         if (APlayerController* PC = World->GetFirstPlayerController())
@@ -711,14 +756,13 @@ void UBombTagGameInstance::RequestServerMatchStart()
             if (ABombTagPlayerController* BTPC = Cast<ABombTagPlayerController>(PC))
             {
                 const FString HostId = GetEffectiveHostPlayerId();
-                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting server match start via RPC (room=%s host=%s)."), *RoomIdentifier, *HostId);
-                // 클라이언트 트래블 경로가 다시 호출되지 않도록 개발 단계에서 감시한다.
-                BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(RequestServerMatchStart);
+                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting dedicated match start via RPC (room=%s host=%s url=%s)."), *RoomIdentifier, *HostId, *TravelURL);
                 BTPC->ServerRequestStartMatch(RoomIdentifier, PendingMatchStartToken);
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] First player controller is not ABombTagPlayerController."));
+                UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] First player controller is not ABombTagPlayerController; travelling locally to %s."), *TravelURL);
+                PC->ClientTravel(TravelURL, ETravelType::TRAVEL_Absolute);
             }
         }
         else
