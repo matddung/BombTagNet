@@ -331,14 +331,14 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     if (!ParseMatchStartToken(StartToken, TokenSecret, TokenPayload, TokenParseError))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Start token verification failed: %s"), *TokenParseError);
-        OutError = TEXT("MATCH_START_DENIED 8");
+        OutError = TEXT("MATCH_START_DENIED 9");
         return false;
     }
 
     if (!RequiredId.IsEmpty() && !TokenPayload.RoomId.Equals(RequiredId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Token room mismatch: expected %s but token has %s"), *RequiredId, *TokenPayload.RoomId);
-        OutError = TEXT("MATCH_START_DENIED 8");
+        OutError = TEXT("MATCH_START_DENIED 10");
         return false;
     }
 
@@ -346,7 +346,7 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     if (!ExpectedMatchId.IsEmpty() && !TokenPayload.MatchId.Equals(ExpectedMatchId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Token match mismatch: expected %s but token has %s"), *ExpectedMatchId, *TokenPayload.MatchId);
-        OutError = TEXT("MATCH_START_DENIED 8");
+        OutError = TEXT("MATCH_START_DENIED 11");
         return false;
     }
 
@@ -354,7 +354,7 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     if (!PendingDedicatedServerId.IsEmpty() && !TokenPayload.DedicatedServerId.Equals(PendingDedicatedServerId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Token DS mismatch: pending=%s token=%s"), *PendingDedicatedServerId, *TokenPayload.DedicatedServerId);
-        OutError = TEXT("MATCH_START_DENIED 8");
+        OutError = TEXT("MATCH_START_DENIED 12");
         return false;
     }
 
@@ -362,7 +362,7 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     if (!LocalDedicatedServerId.IsEmpty() && !TokenPayload.DedicatedServerId.Equals(LocalDedicatedServerId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Local DS id %s does not match token %s"), *LocalDedicatedServerId, *TokenPayload.DedicatedServerId);
-        OutError = TEXT("MATCH_START_DENIED 8");
+        OutError = TEXT("MATCH_START_DENIED 13");
         return false;
     }
 
@@ -370,7 +370,7 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     if (TokenPayload.ExpiresAt <= NowUtc)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Start token expired at %s (now=%s)"), *TokenPayload.ExpiresAt.ToIso8601(), *NowUtc.ToIso8601());
-        OutError = TEXT("MATCH_START_DENIED 8");
+        OutError = TEXT("MATCH_START_DENIED 14");
         return false;
     }
 
@@ -384,7 +384,7 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     if (ExpectedPort > 0 && LocalBoundPort > 0 && ExpectedPort != LocalBoundPort)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Dedicated server port mismatch: expected %d actual %d"), ExpectedPort, LocalBoundPort);
-        OutError = TEXT("MATCH_START_DENIED 8");
+        OutError = TEXT("MATCH_START_DENIED 15");
         return false;
     }
 

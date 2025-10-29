@@ -17,7 +17,7 @@ namespace
 {
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
-    const TCHAR* DefaultBackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
+    const TCHAR* DefaultBackendBaseUrl = TEXT("http://34.64.149.81:8080/api");
 
     bool IsBackendBaseUrlValid(FString& Url)
     {
@@ -491,7 +491,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
     StartMatchQueuePolling();
 }
 
-void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DedicatedServerId, int32 QueryPort, const FString& StartTokenExpiresAt)
+void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DSId, int32 QueryPort, const FString& StartTokenExpiresAt)
 {
     PendingMatchHostPlayerId = HostPlayer;
 
@@ -508,7 +508,7 @@ void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const F
 
     PendingMatchHostPort = HostPort > 0 ? HostPort : 0;
     PendingMatchStartToken = StartToken;
-    PendingMatchDedicatedServerId = DedicatedServerId;
+    PendingMatchDedicatedServerId = DSId;
     PendingMatchQueryPort = QueryPort;
     PendingMatchStartTokenExpiresAt = StartTokenExpiresAt;
 }

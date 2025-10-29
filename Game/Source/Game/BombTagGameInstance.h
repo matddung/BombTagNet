@@ -143,7 +143,7 @@ private:
     void StartMatchQueuePolling();
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
-    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DedicatedServerId, int32 QueryPort, const FString& StartTokenExpiresAt);
+    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DSId, int32 QueryPort, const FString& StartTokenExpiresAt);
     FString ChooseMatchHostAddress(const FString& HostPlayer, const FString& HostPublicAddress, const FString& HostInternalAddress) const;
     void BroadcastPlayerRecord();
 
