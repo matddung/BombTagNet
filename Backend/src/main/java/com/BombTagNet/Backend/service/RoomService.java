@@ -1,7 +1,7 @@
 package com.BombTagNet.Backend.service;
 
+import com.BombTagNet.Backend.service.DedicatedServerRegistry.*;
 import com.BombTagNet.Backend.common.RoomStatus;
-import com.BombTagNet.Backend.config.GameHostProperties;
 import com.BombTagNet.Backend.dao.Player;
 import com.BombTagNet.Backend.dao.Room;
 import org.springframework.stereotype.Service;
@@ -17,17 +17,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RoomService {
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final AtomicInteger seq = new AtomicInteger(1);
-    private final GameHostProperties hostProperties;
+    private final DedicatedServerRegistry dedicatedServers;
+    private final MatchTokenService tokens;
 
-    public RoomService(GameHostProperties hostProperties) {
-        this.hostProperties = hostProperties;
+    public RoomService(DedicatedServerRegistry dedicatedServers, MatchTokenService tokens) {
+        this.dedicatedServers = dedicatedServers;
+        this.tokens = tokens;
     }
 
     public Room create(String hostId, String name, int maxPlayers, String password, String hostAddress) {
         String roomId = normalizeRoomKey(name);
         String canonicalKey = toCanonicalKey(roomId);
         Room r = new Room(roomId, hostId, roomId, Math.max(2, Math.min(4, maxPlayers)), password);
-        r.updateHostEndpoint(hostProperties.resolveAddress(hostAddress), hostProperties.getPort());
+        r.updateHostEndpoint(hostAddress, null, null, null);
         Room existing = rooms.putIfAbsent(canonicalKey, r);
         if (existing != null) {
             throw new IllegalStateException("ROOM_ALREADY_EXISTS");
@@ -39,9 +41,7 @@ public class RoomService {
         if (room == null) {
             return;
         }
-        String resolvedAddress = hostProperties.resolveAddress(address);
-        int resolvedPort = hostProperties.resolvePort(port);
-        room.updateHostEndpoint(resolvedAddress, resolvedPort);
+        room.updateHostEndpoint(address, port, null, null);
     }
 
     private String normalizeRoomKey(String name) {
@@ -123,9 +123,24 @@ public class RoomService {
         }
     }
 
-    public void start(Room r, String requesterId, int minPlayersNeeded) {
+    public MatchLaunch start(Room r, String requesterId, int minPlayersNeeded) {
         if (!Objects.equals(r.hostId(), requesterId)) throw new IllegalStateException("ONLY_HOST");
         if (r.size() < minPlayersNeeded) throw new IllegalStateException("NOT_ENOUGH_PLAYERS");
+        DedicatedServerRecord server = dedicatedServers.allocateReadyServer()
+                .orElseThrow(() -> new IllegalStateException("NO_DEDICATED_SERVER_AVAILABLE"));
+
+        String matchId = "m_" + seq.getAndIncrement();
+        MatchTokenService.IssuedToken token = tokens.issueToken(server.dsId(), r.roomId(), matchId);
+
+        r.updateHostEndpoint(server.publicAddress(), server.gamePort(), server.internalAddress(), server.queryPort());
+        r.setDedicatedServerId(server.dsId());
         r.setStatus(RoomStatus.STARTED);
+        r.setStartToken(token.token(), token.payload().expiresAt());
+
+        return new MatchLaunch(matchId, r.hostId(), server, token.token(), token.payload().expiresAt());
+    }
+
+    public record MatchLaunch(String matchId, String hostPlayerId, DedicatedServerRecord server,
+                              String startToken, java.time.Instant expiresAt) {
     }
 }

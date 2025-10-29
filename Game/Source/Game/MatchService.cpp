@@ -196,7 +196,15 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
         OutStatus.HostPort = static_cast<int32>(HostPortValue);
     }
 
+    double QueryPortValue = 0.0;
+    if (JsonObject->TryGetNumberField(TEXT("queryPort"), QueryPortValue))
+    {
+        OutStatus.QueryPort = static_cast<int32>(QueryPortValue);
+    }
+
+    JsonObject->TryGetStringField(TEXT("dedicatedServerId"), OutStatus.DedicatedServerId);
     JsonObject->TryGetStringField(TEXT("startToken"), OutStatus.StartToken);
+    JsonObject->TryGetStringField(TEXT("startTokenExpiresAt"), OutStatus.StartTokenExpiresAt);
 
     return true;
 }

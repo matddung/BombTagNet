@@ -42,6 +42,12 @@ struct GAME_API FRoomSummary
     int32 HostPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
+    int32 QueryPort = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString DedicatedServerId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
     int32 MinPlayers = 2;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
@@ -55,6 +61,9 @@ struct GAME_API FRoomSummary
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
     FString StartToken;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Room")
+    FString StartTokenExpiresAt;
 };
 
 USTRUCT(BlueprintType)
@@ -94,6 +103,15 @@ struct GAME_API FMatchStartInfo
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString StartToken;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString DedicatedServerId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    int32 QueryPort = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Match")
+    FString StartTokenExpiresAt;
 };
 
 UCLASS()

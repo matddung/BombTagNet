@@ -14,7 +14,12 @@ public class Room {
     private final String password;
     private volatile RoomStatus status = RoomStatus.WAITING;
     private volatile String hostAddress;
-    private volatile int hostPort = 7777;
+    private volatile int hostPort = 0;
+    private volatile String hostInternalAddress;
+    private volatile Integer queryPort;
+    private volatile String dedicatedServerId;
+    private volatile String startToken;
+    private volatile java.time.Instant startTokenExpiresAt;
 
     private final Map<String, Player> players = new ConcurrentHashMap<>();
 
@@ -42,13 +47,48 @@ public class Room {
         return hostPort;
     }
 
-    public void updateHostEndpoint(String address, int port) {
+    public void updateHostEndpoint(String address, Integer port, String internalAddress, Integer queryPort) {
         if (address != null && !address.isBlank()) {
-            this.hostAddress = address;
+            this.hostAddress = address.trim();
         }
-        if (port > 0) {
+        if (port != null && port > 0) {
             this.hostPort = port;
         }
+        if (internalAddress != null && !internalAddress.isBlank()) {
+            this.hostInternalAddress = internalAddress.trim();
+        }
+        if (queryPort != null && queryPort > 0) {
+            this.queryPort = queryPort;
+        }
+    }
+
+    public String hostInternalAddress() {
+        return hostInternalAddress;
+    }
+
+    public Integer queryPort() {
+        return queryPort;
+    }
+
+    public void setDedicatedServerId(String dedicatedServerId) {
+        this.dedicatedServerId = dedicatedServerId;
+    }
+
+    public String dedicatedServerId() {
+        return dedicatedServerId;
+    }
+
+    public void setStartToken(String token, java.time.Instant expiresAt) {
+        this.startToken = token;
+        this.startTokenExpiresAt = expiresAt;
+    }
+
+    public String startToken() {
+        return startToken;
+    }
+
+    public java.time.Instant startTokenExpiresAt() {
+        return startTokenExpiresAt;
     }
 
     public String name() {

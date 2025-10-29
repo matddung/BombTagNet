@@ -1,6 +1,6 @@
 package com.BombTagNet.Backend.service;
 
-import com.BombTagNet.Backend.config.GameHostProperties;
+import com.BombTagNet.Backend.service.DedicatedServerRegistry.*;
 import com.BombTagNet.Backend.dao.Player;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,9 @@ public class MatchService {
         CANCELLED
     }
 
-    public record MatchInfo(String matchId, List<Player> players, String hostPlayerId, String hostAddress, int hostPort) {
+    public record MatchInfo(String matchId, List<Player> players, String hostPlayerId, String dedicatedServerId,
+                            String hostAddress, String hostInternalAddress, int hostPort, Integer queryPort,
+                            String startToken, Instant startTokenExpiresAt) {
     }
 
     public record MatchQueueStatus(
@@ -37,7 +39,12 @@ public class MatchService {
             List<Player> players,
             String hostPlayerId,
             String hostAddress,
-            Integer hostPort
+            Integer hostPort,
+            String hostInternalAddress,
+            Integer queryPort,
+            String dedicatedServerId,
+            String startToken,
+            Instant startTokenExpiresAt
     ) {
     }
 
@@ -52,12 +59,14 @@ public class MatchService {
     private final AtomicInteger ticketSeq = new AtomicInteger(1);
     private final AtomicInteger matchSeq = new AtomicInteger(1);
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    private final GameHostProperties hostProperties;
+    private final DedicatedServerRegistry dedicatedServers;
+    private final MatchTokenService tokens;
 
     private PendingMatch pendingMatch;
 
-    public MatchService(GameHostProperties hostProperties) {
-        this.hostProperties = hostProperties;
+    public MatchService(DedicatedServerRegistry dedicatedServers, MatchTokenService tokens) {
+        this.dedicatedServers = dedicatedServers;
+        this.tokens = tokens;
     }
 
     public MatchQueueStatus enqueue(String playerId, String nickname, String address) {
@@ -73,7 +82,7 @@ public class MatchService {
                 }
             }
 
-            MatchTicket ticket = new MatchTicket("t_" + ticketSeq.getAndIncrement(), new Player(playerId, nickname), hostProperties.resolveAddress(address));
+            MatchTicket ticket = new MatchTicket("t_" + ticketSeq.getAndIncrement(), new Player(playerId, nickname), address == null ? null : address.trim());
             ticketsById.put(ticket.ticketId, ticket);
             ticketsByPlayer.put(playerId, ticket);
 
@@ -211,14 +220,33 @@ public class MatchService {
             match.countdown.cancel(false);
         }
 
+        Optional<DedicatedServerRecord> serverOpt = dedicatedServers.allocateReadyServer();
+        if (serverOpt.isEmpty()) {
+            match.deadline = Instant.now().plusSeconds(1);
+            match.countdown = scheduler.schedule(() -> onCountdownFinished(match.matchId), 1, TimeUnit.SECONDS);
+            return;
+        }
+
+        DedicatedServerRecord server = serverOpt.get();
+
         List<Player> players = match.players();
         MatchTicket hostTicket = match.tickets.isEmpty() ? null : match.tickets.get(0);
         String hostPlayerId = hostTicket == null ? null : hostTicket.player.playerId();
-        String hostAddress = hostTicket == null ? null : hostTicket.address;
-        hostAddress = hostProperties.resolveAddress(hostAddress);
-        int hostPort = hostProperties.getPort();
 
-        MatchInfo info = new MatchInfo(match.matchId, players, hostPlayerId, hostAddress, hostPort);
+        MatchTokenService.IssuedToken token = tokens.issueToken(server.dsId(), match.matchId, match.matchId);
+
+        MatchInfo info = new MatchInfo(
+                match.matchId,
+                players,
+                hostPlayerId,
+                server.dsId(),
+                server.publicAddress(),
+                server.internalAddress(),
+                server.gamePort(),
+                server.queryPort(),
+                token.token(),
+                token.payload().expiresAt()
+        );
 
         for (MatchTicket ticket : match.tickets) {
             ticket.pendingMatch = null;
@@ -241,7 +269,12 @@ public class MatchService {
         List<Player> players = List.of();
         String hostPlayerId = null;
         String hostAddress = null;
+        String hostInternalAddress = null;
         Integer hostPort = null;
+        Integer queryPort = null;
+        String dedicatedServerId = null;
+        String startToken = null;
+        Instant startTokenExpiresAt = null;
 
         if (ticket.status == TicketStatus.QUEUED) {
             position = queuePosition(ticket);
@@ -258,13 +291,14 @@ public class MatchService {
                 players = ticket.matchInfo.players();
                 hostPlayerId = ticket.matchInfo.hostPlayerId();
                 hostAddress = ticket.matchInfo.hostAddress();
+                hostInternalAddress = ticket.matchInfo.hostInternalAddress();
                 hostPort = ticket.matchInfo.hostPort();
+                queryPort = ticket.matchInfo.queryPort();
+                dedicatedServerId = ticket.matchInfo.dedicatedServerId();
+                startToken = ticket.matchInfo.startToken();
+                startTokenExpiresAt = ticket.matchInfo.startTokenExpiresAt();
             }
         }
-
-        hostAddress = hostProperties.resolveAddress(hostAddress);
-        int resolvedPort = hostProperties.resolvePort(hostPort);
-        hostPort = resolvedPort;
 
         return new MatchQueueStatus(
                 ticket.ticketId,
@@ -278,7 +312,12 @@ public class MatchService {
                 List.copyOf(players),
                 hostPlayerId,
                 hostAddress,
-                hostPort
+                hostPort,
+                hostInternalAddress,
+                queryPort,
+                dedicatedServerId,
+                startToken,
+                startTokenExpiresAt
         );
     }
 

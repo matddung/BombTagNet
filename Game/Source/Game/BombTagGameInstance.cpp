@@ -9,22 +9,15 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/CString.h"
 #include "Misc/ConfigCacheIni.h"
-#include "Engine/LocalPlayer.h"
-#include "Online/OnlineSessionNames.h"
-#include "OnlineSessionSettings.h"
-#include "OnlineSubsystem.h"
-#include "Interfaces/OnlineSessionInterface.h"
 
 namespace
 {
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
-    const TCHAR* DefaultBackendBaseUrl = TEXT("http://34.64.149.81:8080/api");
-    const TCHAR* DefaultMatchHostAddress = TEXT("34.64.149.81");
-    const TCHAR* DefaultMatchHostInternalAddress = TEXT("10.178.0.2");
-    constexpr int32 DefaultMatchPort = 7777;
-    const FName SessionSettingOwnerKey(TEXT("SETTING_OWNER"));
+    const TCHAR* DefaultBackendBaseUrl = TEXT("http://127.0.0.1:8080/api");
 
     bool IsBackendBaseUrlValid(FString& Url)
     {
@@ -80,6 +73,48 @@ void UBombTagGameInstance::Init()
     GConfig->GetBool(TEXT("Game.Net"), TEXT("bPreferInternalHostAddress"), bPreferInternal, GGameIni);
     bPreferInternalHostAddress = bPreferInternal;
 
+    FString TokenSecret;
+    if (!GConfig->GetString(TEXT("Game.Net"), TEXT("MatchStartTokenSecret"), TokenSecret, GGameIni))
+    {
+        TokenSecret = TEXT("change-me");
+    }
+    MatchStartTokenSecret = TokenSecret;
+
+    GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("DedicatedServerId"), DedicatedServerId, GGameIni);
+    GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("PublicAddress"), DedicatedServerPublicAddress, GGameIni);
+    GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("InternalAddress"), DedicatedServerInternalAddress, GGameIni);
+    GConfig->GetInt(TEXT("Game.DedicatedServer"), TEXT("GamePort"), DedicatedServerGamePort, GGameIni);
+    GConfig->GetInt(TEXT("Game.DedicatedServer"), TEXT("QueryPort"), DedicatedServerQueryPort, GGameIni);
+
+    auto ApplyEnvOverride = [](const TCHAR* EnvVar, FString& Target, bool bTrim)
+        {
+            FString Value = FPlatformMisc::GetEnvironmentVariable(EnvVar);
+            if (!Value.IsEmpty())
+            {
+                if (bTrim)
+                {
+                    Value.TrimStartAndEndInline();
+                }
+                Target = Value;
+            }
+        };
+
+    ApplyEnvOverride(TEXT("BOMBTAG_DS_ID"), DedicatedServerId, true);
+    ApplyEnvOverride(TEXT("BOMBTAG_DS_PUBLIC_ADDRESS"), DedicatedServerPublicAddress, true);
+    ApplyEnvOverride(TEXT("BOMBTAG_DS_INTERNAL_ADDRESS"), DedicatedServerInternalAddress, true);
+
+    auto ApplyEnvPort = [](const TCHAR* EnvVar, int32& Target)
+        {
+            FString Value = FPlatformMisc::GetEnvironmentVariable(EnvVar);
+            if (!Value.IsEmpty())
+            {
+                Target = FCString::Atoi(*Value);
+            }
+        };
+
+    ApplyEnvPort(TEXT("BOMBTAG_DS_GAME_PORT"), DedicatedServerGamePort);
+    ApplyEnvPort(TEXT("BOMBTAG_DS_QUERY_PORT"), DedicatedServerQueryPort); 
+    
     Api = NewObject<UApiClient>(this);
     if (Api)
     {
@@ -203,74 +238,6 @@ void UBombTagGameInstance::ResetPlayerRecord()
     BroadcastPlayerRecord();
 }
 
-void UBombTagGameInstance::HostOnlineSession(const FString& SessionName, const FString& SessionPassword, int32 MaxPublicConnections, bool bIsLanMatch)
-{
-    CurrentSessionName = SessionName.IsEmpty() ? TEXT("BombTag Session") : SessionName;
-    CurrentSessionPassword = SessionPassword;
-    CurrentMaxPlayers = FMath::Clamp(MaxPublicConnections, 1, 64);
-    bCurrentIsLan = bIsLanMatch;
-
-    UE_LOG(LogTemp, Log, TEXT("[Host] name='%s' pw='%s' max=%d lan=%d"), *CurrentSessionName, *CurrentSessionPassword, CurrentMaxPlayers, bCurrentIsLan ? 1 : 0);
-
-    IOnlineSubsystem* OnlineSubsystem = IOnlineSubsystem::Get();
-    if (!OnlineSubsystem)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] OnlineSubsystem not available; session metadata not published."));
-        return;
-    }
-
-    IOnlineSessionPtr SessionInterface = OnlineSubsystem->GetSessionInterface();
-    if (!SessionInterface.IsValid())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Session interface invalid; session metadata not published."));
-        return;
-    }
-
-    FOnlineSessionSettings SessionSettings;
-    SessionSettings.NumPublicConnections = CurrentMaxPlayers;
-    SessionSettings.NumPrivateConnections = 0;
-    SessionSettings.bAllowJoinInProgress = true;
-    SessionSettings.bIsLANMatch = bCurrentIsLan;
-    SessionSettings.bShouldAdvertise = true;
-    SessionSettings.bUsesPresence = true;
-    SessionSettings.bAllowJoinViaPresence = true;
-    SessionSettings.bAllowJoinViaPresenceFriendsOnly = false;
-
-    const FString MapNameValue = TEXT("/Game/Maps/MainMap");
-    const FString GameModeValue = TEXT("BP_BombTagGameMode");
-    const FString OwnerValue = PlayerId.IsEmpty() ? FString(TEXT("UNKNOWN_HOST")) : PlayerId;
-
-    // 온라인 세션 브라우징 시 서버측 메타데이터가 노출되도록 ViaOnlineService로 광고한다.
-    SessionSettings.Set(SETTING_MAPNAME, MapNameValue, EOnlineDataAdvertisementType::ViaOnlineService);
-    SessionSettings.Set(SETTING_GAMEMODE, GameModeValue, EOnlineDataAdvertisementType::ViaOnlineService);
-    // 엔진 기본 키에 존재하지 않는 호스트 식별자는 별도 키를 명시적으로 정의해 사용한다.
-    SessionSettings.Set(SessionSettingOwnerKey, OwnerValue, EOnlineDataAdvertisementType::ViaOnlineService);
-    // 매치 로그에서도 동일 정보를 남겨 추적 가능하게 한다.
-    UE_LOG(LogTemp, Log, TEXT("[Match] Session metadata map=%s mode=%s owner=%s"), *MapNameValue, *GameModeValue, *OwnerValue);
-
-    if (!CurrentSessionPassword.IsEmpty())
-    {
-        SessionSettings.Set(TEXT("SESSION_PASSWORD"), CurrentSessionPassword, EOnlineDataAdvertisementType::DontAdvertise);
-    }
-
-    const ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
-    FUniqueNetIdPtr UserId = LocalPlayer ? LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId() : nullptr;
-
-    if (UserId.IsValid())
-    {
-        SessionInterface->CreateSession(*UserId, NAME_GameSession, SessionSettings);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Unable to resolve unique net id for host; session not created."));
-    }
-}
-
-void UBombTagGameInstance::FindAndJoinSession(const FString& SessionName, const FString& SessionPassword, bool /*bIsLanQuery*/)
-{
-    UE_LOG(LogTemp, Log, TEXT("[Join] name='%s' pw='%s'"), *SessionName, *SessionPassword);
-}
-
 void UBombTagGameInstance::LeaveSession()
 {
     UE_LOG(LogTemp, Log, TEXT("LeaveSession"));
@@ -330,10 +297,6 @@ void UBombTagGameInstance::Backend_CreateRoom(const FString& Name, int32 MaxPlay
         return;
     }
 
-    CurrentSessionName = Name;
-    CurrentSessionPassword = Password;
-    CurrentMaxPlayers = MaxPlayers;
-
     Room->CreateRoom(Name, MaxPlayers, Password, [this](bool bSuccess, const FRoomSummary& RoomSummary, const FString& Error)
         {
             if (!bSuccess)
@@ -362,9 +325,6 @@ void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString
         return;
     }
 
-    CurrentSessionName = RoomId;
-    CurrentSessionPassword = Password;
-
     Room->JoinRoom(RoomId, Password, [this](bool bSuccess, const FJoinRes& Result, const FString& Error)
         {
             if (!bSuccess)
@@ -385,7 +345,7 @@ void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString
             Summary.RoomId = Result.RoomId;
             Summary.Status = TEXT("WAITING");
             Summary.MinPlayers = 2;
-            Summary.MaxPlayers = CurrentMaxPlayers > 0 ? CurrentMaxPlayers : 4;
+            Summary.MaxPlayers = 4;
             Summary.CurrentPlayers = Result.Players.Num();
             Summary.Players = Result.Players;
             OnRoomUpdated.Broadcast(Summary);
@@ -428,7 +388,7 @@ void UBombTagGameInstance::Backend_GetRoom()
             {
                 bRoomHasStarted = true;
                 PendingMatchRoomId = RoomSummary.RoomId;
-                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.HostAddress, RoomSummary.HostInternalAddress, RoomSummary.HostPort, RoomSummary.StartToken);
+                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.HostAddress, RoomSummary.HostInternalAddress, RoomSummary.HostPort, RoomSummary.StartToken, RoomSummary.DedicatedServerId, RoomSummary.QueryPort, RoomSummary.StartTokenExpiresAt);
                 OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
             }
         });
@@ -437,13 +397,12 @@ void UBombTagGameInstance::Backend_GetRoom()
 void UBombTagGameInstance::ResetCurrentSessionState()
 {
     ResetMatchQueueState();
-    CurrentSessionName.Reset();
-    CurrentSessionPassword.Reset();
-    CurrentMaxPlayers = 4;
-    bCurrentIsLan = false;
     CurrentRoomId.Reset();
     bRoomHasStarted = false;
     PendingMatchStartToken.Reset();
+    PendingMatchDedicatedServerId.Reset();
+    PendingMatchStartTokenExpiresAt.Reset();
+    PendingMatchQueryPort = 0;
     PendingMatchRoomId.Reset();
 }
 
@@ -459,6 +418,9 @@ void UBombTagGameInstance::ResetMatchQueueState()
     PendingMatchHostInternalAddress.Reset();
     PendingMatchHostPort = 0;
     PendingMatchStartToken.Reset();
+    PendingMatchDedicatedServerId.Reset();
+    PendingMatchStartTokenExpiresAt.Reset();
+    PendingMatchQueryPort = 0;
     PendingMatchRoomId.Reset();
 }
 
@@ -508,7 +470,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
         {
             bMatchQueueLaunched = true;
             PendingMatchRoomId = Status.MatchId;
-            PrepareMatchLaunch(Status.HostPlayerId, Status.HostAddress, Status.HostInternalAddress, Status.HostPort, Status.StartToken);
+            PrepareMatchLaunch(Status.HostPlayerId, Status.HostAddress, Status.HostInternalAddress, Status.HostPort, Status.StartToken, Status.DedicatedServerId, Status.QueryPort, Status.StartTokenExpiresAt);
             RequestServerMatchStart();
         }
         return;
@@ -529,7 +491,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
     StartMatchQueuePolling();
 }
 
-void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken)
+void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DedicatedServerId, int32 QueryPort, const FString& StartTokenExpiresAt)
 {
     PendingMatchHostPlayerId = HostPlayer;
 
@@ -542,15 +504,13 @@ void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const F
     PendingMatchHostInternalAddress = InternalAddress;
 
     const FString SelectedAddress = ChooseMatchHostAddress(HostPlayer, PublicAddress, InternalAddress);
-    PendingMatchHostAddress = SelectedAddress.IsEmpty() ? FString(DefaultMatchHostAddress) : SelectedAddress;
+    PendingMatchHostAddress = SelectedAddress;
 
-    if (PendingMatchHostInternalAddress.IsEmpty() && PendingMatchHostAddress.Equals(DefaultMatchHostInternalAddress, ESearchCase::IgnoreCase))
-    {
-        PendingMatchHostInternalAddress = FString(DefaultMatchHostInternalAddress);
-    }
-
-    PendingMatchHostPort = HostPort > 0 ? HostPort : DefaultMatchPort;
+    PendingMatchHostPort = HostPort > 0 ? HostPort : 0;
     PendingMatchStartToken = StartToken;
+    PendingMatchDedicatedServerId = DedicatedServerId;
+    PendingMatchQueryPort = QueryPort;
+    PendingMatchStartTokenExpiresAt = StartTokenExpiresAt;
 }
 
 FString UBombTagGameInstance::GetPendingMatchTravelURL() const
@@ -623,7 +583,7 @@ FString UBombTagGameInstance::ChooseMatchHostAddress(const FString& HostPlayer, 
         {
             return PublicAddress;
         }
-        return FString(DefaultMatchHostInternalAddress);
+        return FString();
     }
 
     if (!PublicAddress.IsEmpty())
@@ -636,7 +596,7 @@ FString UBombTagGameInstance::ChooseMatchHostAddress(const FString& HostPlayer, 
         return InternalAddress;
     }
 
-    return FString(DefaultMatchHostAddress);
+    return FString();
 }
 
 void UBombTagGameInstance::Backend_StartRoom()
@@ -667,7 +627,7 @@ void UBombTagGameInstance::Backend_StartRoom()
             UE_LOG(LogTemp, Log, TEXT("MatchId=%s host=%s public=%s internal=%s port=%d"), *Info.MatchId, *Info.HostPlayerId, *Info.HostAddress, *Info.HostInternalAddress, Info.HostPort);
             bRoomHasStarted = true;
             PendingMatchRoomId = Info.MatchId.IsEmpty() ? CurrentRoomId : Info.MatchId;
-            PrepareMatchLaunch(Info.HostPlayerId, Info.HostAddress, Info.HostInternalAddress, Info.HostPort, Info.StartToken);
+            PrepareMatchLaunch(Info.HostPlayerId, Info.HostAddress, Info.HostInternalAddress, Info.HostPort, Info.StartToken, Info.DedicatedServerId, Info.QueryPort, Info.StartTokenExpiresAt);
             OnRoomStarted.Broadcast(true, Info.MatchId);
         });
 }
@@ -761,7 +721,7 @@ void UBombTagGameInstance::RequestServerMatchStart()
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] First player controller is not ABombTagPlayerController; travelling locally to %s."), *TravelURL);
+                UE_LOG(LogTemp, Error, TEXT("[Match][Error] First player controller is not ABombTagPlayerController; aborting travel to %s."), *TravelURL);
                 PC->ClientTravel(TravelURL, ETravelType::TRAVEL_Absolute);
             }
         }
@@ -872,12 +832,10 @@ FString UBombTagGameInstance::GetEffectiveHostPlayerId() const
 
 void UBombTagGameInstance::Deprecated_ClientTravelToMatch()
 {
-    // 클라이언트 트래블 호출이 남아 있는지 감시용으로만 존재한다.
     BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(Deprecated_ClientTravelToMatch);
 }
 
 void UBombTagGameInstance::Deprecated_ClientReturnToMenu()
 {
-    // 서버 주도 복귀를 강제하기 위한 감시용 스텁.
     BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(Deprecated_ClientReturnToMenu);
 }

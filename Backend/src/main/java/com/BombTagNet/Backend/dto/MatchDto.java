@@ -26,7 +26,12 @@ public class MatchDto {
             List<Player> players,
             String hostPlayerId,
             String hostAddress,
-            Integer hostPort
+            Integer hostPort,
+            String hostInternalAddress,
+            Integer queryPort,
+            String dedicatedServerId,
+            String startToken,
+            String startTokenExpiresAt
     ) {
     }
 }

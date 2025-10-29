@@ -6,6 +6,7 @@ import com.BombTagNet.Backend.dao.Player;
 import com.BombTagNet.Backend.dao.Room;
 import com.BombTagNet.Backend.dto.RoomDto.*;
 import com.BombTagNet.Backend.service.RoomService;
+import com.BombTagNet.Backend.service.RoomService.MatchLaunch;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -57,19 +58,19 @@ public class RoomController {
     }
 
     @PostMapping("/{roomId}/start")
-    public ResponseEntity<?> start(HttpServletRequest request, @PathVariable String roomId) {
+    public ResponseEntity<StartRoomRes> start(HttpServletRequest request, @PathVariable String roomId) {
         Room room = requireRoom(roomId);
-        rooms.start(room, PlayerRequestUtils.requirePlayerId(request), MIN_PLAYERS);
-        if (request != null) {
-            rooms.updateHostEndpoint(room, RequestIpUtils.resolveRemoteAddress(request), null);
-        }
-        return ResponseEntity.ok().body(java.util.Map.of(
-                "matchId", "m_" + System.currentTimeMillis(),
-                "map", "MainMap",
-                "seed", 123456,
-                "hostPlayerId", room.hostId(),
-                "hostAddress", room.hostAddress(),
-                "hostPort", room.hostPort()
+        MatchLaunch launch = rooms.start(room, PlayerRequestUtils.requirePlayerId(request), MIN_PLAYERS);
+        return ResponseEntity.ok(new StartRoomRes(
+                launch.matchId(),
+                launch.hostPlayerId(),
+                launch.server().publicAddress(),
+                launch.server().gamePort() <= 0 ? null : launch.server().gamePort(),
+                launch.server().internalAddress(),
+                launch.server().queryPort(),
+                launch.server().dsId(),
+                launch.startToken(),
+                launch.expiresAt() == null ? null : launch.expiresAt().toString()
         ));
     }
 
@@ -84,12 +85,16 @@ public class RoomController {
     private RoomSummary toSummary(Room room) {
         List<Player> players = snapshotPlayers(room);
         return new RoomSummary(room.roomId(), room.name(), room.hostId(), room.status(), MIN_PLAYERS, room.maxPlayers(),
-                room.size(), players, room.hostAddress(), room.hostPort());
+                room.size(), players, room.hostAddress(), room.hostPort(), room.hostInternalAddress(), room.queryPort(),
+                room.dedicatedServerId(), room.startToken(),
+                room.startTokenExpiresAt() == null ? null : room.startTokenExpiresAt().toString());
     }
 
     private RoomDetail toDetail(Room room) {
         List<Player> players = snapshotPlayers(room);
         return new RoomDetail(room.roomId(), room.name(), room.status(), MIN_PLAYERS, room.maxPlayers(), room.size(),
-                players, room.hostId(), room.hostAddress(), room.hostPort());
+                players, room.hostId(), room.hostAddress(), room.hostPort(), room.hostInternalAddress(), room.queryPort(),
+                room.dedicatedServerId(), room.startToken(),
+                room.startTokenExpiresAt() == null ? null : room.startTokenExpiresAt().toString());
     }
 }

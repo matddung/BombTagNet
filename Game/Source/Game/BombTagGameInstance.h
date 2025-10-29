@@ -57,12 +57,6 @@ public:
     FOnPlayerRecordUpdated OnPlayerRecordUpdated;
 
     UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
-    void HostOnlineSession(const FString& SessionName, const FString& SessionPassword, int32 MaxPublicConnections, bool bIsLanMatch);
-
-    UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
-    void FindAndJoinSession(const FString& SessionName, const FString& SessionPassword, bool bIsLanQuery);
-
-    UFUNCTION(BlueprintCallable, Category = "Online|Sessions")
     void LeaveSession();
 
     UFUNCTION(BlueprintCallable, Category = "Backend")
@@ -123,10 +117,19 @@ public:
     FString GetPendingMatchHostAddress() const { return PendingMatchHostAddress; }
     FString GetPendingMatchHostInternalAddress() const { return PendingMatchHostInternalAddress; }
     int32 GetPendingMatchHostPort() const { return PendingMatchHostPort; }
+    int32 GetPendingMatchQueryPort() const { return PendingMatchQueryPort; }
+    FString GetPendingMatchDedicatedServerId() const { return PendingMatchDedicatedServerId; }
+    FString GetPendingMatchStartTokenExpiresAt() const { return PendingMatchStartTokenExpiresAt; }
     FString GetLocalPlayerId() const { return PlayerId; }
     FString GetPendingMatchRoomId() const { return PendingMatchRoomId; }
     FString GetPendingMatchTravelURL() const;
     FString GetEffectiveHostPlayerId() const;
+    FString GetMatchStartTokenSecret() const { return MatchStartTokenSecret; }
+    FString GetDedicatedServerId() const { return DedicatedServerId; }
+    FString GetDedicatedServerPublicAddress() const { return DedicatedServerPublicAddress; }
+    FString GetDedicatedServerInternalAddress() const { return DedicatedServerInternalAddress; }
+    int32 GetDedicatedServerGamePort() const { return DedicatedServerGamePort; }
+    int32 GetDedicatedServerQueryPort() const { return DedicatedServerQueryPort; }
 
 private:
     void LoadOrCreatePlayerData();
@@ -140,8 +143,7 @@ private:
     void StartMatchQueuePolling();
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
-    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, int32 HostPort, const FString& StartToken);
-    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken);
+    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DedicatedServerId, int32 QueryPort, const FString& StartTokenExpiresAt);
     FString ChooseMatchHostAddress(const FString& HostPlayer, const FString& HostPublicAddress, const FString& HostInternalAddress) const;
     void BroadcastPlayerRecord();
 
@@ -157,11 +159,6 @@ private:
 
     UPROPERTY()
     TObjectPtr<UMatchService> Match = nullptr;
-
-    FString CurrentSessionName;
-    FString CurrentSessionPassword;
-    int32 CurrentMaxPlayers = 4;
-    bool bCurrentIsLan = false;
 
     FString PlayerId;
     FString PlayerNickname;
@@ -179,8 +176,18 @@ private:
     FString PendingMatchHostInternalAddress;
     int32 PendingMatchHostPort = 0;
     FString PendingMatchStartToken;
+    FString PendingMatchDedicatedServerId;
+    int32 PendingMatchQueryPort = 0;
+    FString PendingMatchStartTokenExpiresAt;
     FString PendingMatchRoomId;
     bool bPreferInternalHostAddress = false;
+
+    FString MatchStartTokenSecret;
+    FString DedicatedServerId;
+    FString DedicatedServerPublicAddress;
+    FString DedicatedServerInternalAddress;
+    int32 DedicatedServerGamePort = 0;
+    int32 DedicatedServerQueryPort = 0;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName MatchMapName = FName(TEXT("/Game/Maps/MainMap"));

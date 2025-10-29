@@ -13,6 +13,6 @@ spring:
       WRITE_DATES_AS_TIMESTAMPS: false
 
 game:
-  host:
-    address: 34.64.149.81
-    port: 7777
+  match:
+    token-secret: YBHft+TFtCj6J2Em9wafFGeTK6AHNzYvcznuyNELIo2u9mRWqawmkuFhwfVIRuME7NYSjQHyCF4nsPXCv92d5A==
+    token-ttl-seconds: 120

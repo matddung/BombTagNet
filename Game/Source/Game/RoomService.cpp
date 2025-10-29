@@ -322,7 +322,15 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
                 Info.HostPort = static_cast<int32>(HostPortValue);
             }
 
+            double QueryPortValue = 0.0;
+            if (RootObject->TryGetNumberField(TEXT("queryPort"), QueryPortValue))
+            {
+                Info.QueryPort = static_cast<int32>(QueryPortValue);
+            }
+
+            RootObject->TryGetStringField(TEXT("dedicatedServerId"), Info.DedicatedServerId);
             RootObject->TryGetStringField(TEXT("startToken"), Info.StartToken);
+            RootObject->TryGetStringField(TEXT("startTokenExpiresAt"), Info.StartTokenExpiresAt);
 
             if (Callback)
             {
@@ -365,7 +373,15 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
         OutSummary.HostPort = static_cast<int32>(HostPortValue);
     }
 
+    double QueryPortValue = 0.0;
+    if (JsonObject->TryGetNumberField(TEXT("queryPort"), QueryPortValue))
+    {
+        OutSummary.QueryPort = static_cast<int32>(QueryPortValue);
+    }
+
+    JsonObject->TryGetStringField(TEXT("dedicatedServerId"), OutSummary.DedicatedServerId);
     JsonObject->TryGetStringField(TEXT("startToken"), OutSummary.StartToken);
+    JsonObject->TryGetStringField(TEXT("startTokenExpiresAt"), OutSummary.StartTokenExpiresAt);
 
     ParseRoomPlayers(JsonObject, OutSummary.Players);
 
