@@ -1,5 +1,9 @@
 server:
   port: 8080
+  tomcat:
+    accesslog:
+      enabled: true
+  forward-headers-strategy: framework
 
 spring:
   jackson:
@@ -9,4 +13,4 @@ spring:
 game:
   match:
     token-secret: YBHft+TFtCj6J2Em9wafFGeTK6AHNzYvcznuyNELIo2u9mRWqawmkuFhwfVIRuME7NYSjQHyCF4nsPXCv92d5A==
-    token-ttl-seconds: 120
+    token-ttl-seconds: 3600

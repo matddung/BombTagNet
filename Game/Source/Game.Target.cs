@@ -9,5 +9,6 @@ public class GameTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_6;
 		ExtraModuleNames.Add("Game");
+		bUseLoggingInShipping = true;
 	}
 }

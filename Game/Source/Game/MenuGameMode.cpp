@@ -16,6 +16,74 @@
 
 namespace
 {
+    bool TryParseIso8601Relaxed(const FString& Input, FDateTime& OutValue)
+    {
+        if (Input.IsEmpty())
+        {
+            return false;
+        }
+
+        if (FDateTime::ParseIso8601(*Input, OutValue))
+        {
+            return true;
+        }
+
+        FString Trimmed = Input;
+        Trimmed.TrimStartAndEndInline();
+
+        int32 DotIndex = INDEX_NONE;
+        if (!Trimmed.FindChar(TEXT('.'), DotIndex))
+        {
+            return false;
+        }
+
+        int32 SuffixIndex = Trimmed.Len();
+        for (int32 Index = DotIndex + 1; Index < Trimmed.Len(); ++Index)
+        {
+            const TCHAR Char = Trimmed[Index];
+            if (Char == TEXT('Z') || Char == TEXT('+') || Char == TEXT('-'))
+            {
+                SuffixIndex = Index;
+                break;
+            }
+        }
+
+        if (SuffixIndex <= DotIndex + 1)
+        {
+            return false;
+        }
+
+        const FString Prefix = Trimmed.Left(DotIndex + 1);
+        const FString Fraction = Trimmed.Mid(DotIndex + 1, SuffixIndex - DotIndex - 1);
+        const FString Suffix = Trimmed.Mid(SuffixIndex);
+
+        if (Fraction.IsEmpty())
+        {
+            return false;
+        }
+
+        const int32 MaxLength = FMath::Min(9, Fraction.Len());
+        for (int32 Length = MaxLength; Length >= 0; --Length)
+        {
+            FString Candidate;
+            if (Length > 0)
+            {
+                Candidate = Prefix + Fraction.Left(Length) + Suffix;
+            }
+            else
+            {
+                Candidate = Trimmed.Left(DotIndex) + Suffix;
+            }
+
+            if (FDateTime::ParseIso8601(*Candidate, OutValue))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     FString BuildEndpointLabel(const FString& Host, int32 Port)
     {
         if (Host.IsEmpty())
@@ -37,20 +105,26 @@ namespace
 
     bool ParseMatchStartToken(const FString& Token, const FString& Secret, FBombTagMatchStartTokenPayload& OutPayload, FString& OutError)
     {
-        if (Token.IsEmpty())
+        FString TrimmedToken = Token;
+        TrimmedToken.TrimStartAndEndInline();
+
+        if (TrimmedToken.IsEmpty())
         {
             OutError = TEXT("TOKEN_EMPTY");
             return false;
         }
 
-        if (Secret.IsEmpty())
+        FString TrimmedSecret = Secret;
+        TrimmedSecret.TrimStartAndEndInline();
+
+        if (TrimmedSecret.IsEmpty())
         {
             OutError = TEXT("TOKEN_SECRET_UNAVAILABLE");
             return false;
         }
 
         TArray<FString> Segments;
-        Token.ParseIntoArray(Segments, TEXT("."), true);
+        TrimmedToken.ParseIntoArray(Segments, TEXT("."), true);
         if (Segments.Num() != 3)
         {
             OutError = TEXT("TOKEN_FORMAT");
@@ -67,16 +141,26 @@ namespace
             return false;
         }
 
-        const FString Material = FString::Printf(TEXT("%s.%s.%s"), *Header, *PayloadSegment, *Secret);
-        const FString ExpectedSignature = FMD5::HashAnsiString(*Material);
+        const FString Material = FString::Printf(TEXT("%s.%s.%s"), *Header, *PayloadSegment, *TrimmedSecret);
+        FTCHARToUTF8 MaterialUtf8(*Material);
+        const FString ExpectedSignature = FMD5::HashBytes(reinterpret_cast<const uint8*>(MaterialUtf8.Get()), MaterialUtf8.Length()).ToLower();
         if (!SignatureSegment.Equals(ExpectedSignature, ESearchCase::IgnoreCase))
         {
             OutError = TEXT("TOKEN_SIGNATURE");
             return false;
         }
 
+        FString NormalizedPayload = PayloadSegment;
+        NormalizedPayload.ReplaceInline(TEXT("-"), TEXT("+"));
+        NormalizedPayload.ReplaceInline(TEXT("_"), TEXT("/"));
+
+        while ((NormalizedPayload.Len() % 4) != 0)
+        {
+            NormalizedPayload.AppendChar(TEXT('='));
+        }
+
         TArray<uint8> PayloadBytes;
-        if (!FBase64::Decode(PayloadSegment, PayloadBytes))
+        if (!FBase64::Decode(NormalizedPayload, PayloadBytes))
         {
             OutError = TEXT("TOKEN_DECODE");
             return false;
@@ -117,7 +201,7 @@ namespace
         }
 
         FDateTime ExpirationValue;
-        if (!FDateTime::ParseIso8601(*ExpirationText, ExpirationValue))
+        if (!TryParseIso8601Relaxed(ExpirationText, ExpirationValue))
         {
             OutError = TEXT("TOKEN_EXP_PARSE");
             return false;

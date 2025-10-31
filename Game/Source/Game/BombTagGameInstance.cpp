@@ -17,7 +17,7 @@ namespace
 {
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
-    const TCHAR* DefaultBackendBaseUrl = TEXT("http://34.64.149.81:8080/api");
+    const TCHAR* DefaultBackendBaseUrl = TEXT("https://api.studyjun.net/api");
 
     bool IsBackendBaseUrlValid(FString& Url)
     {
@@ -36,6 +36,12 @@ namespace
             return false;
         }
 
+        const FString Scheme = Url.Left(SchemeIndex);
+        if (!Scheme.Equals(TEXT("http"), ESearchCase::IgnoreCase) && !Scheme.Equals(TEXT("https"), ESearchCase::IgnoreCase))
+        {
+            return false;
+        }
+
         const int32 HostStartIndex = SchemeIndex + SchemeDelimiter.Len();
         if (HostStartIndex >= Url.Len())
         {
@@ -49,6 +55,77 @@ namespace
 
         return true;
     }
+
+    FString NormalizeBackendBaseUrl(const FString& RawUrl, bool& bOutRewrote)
+    {
+        FString Url = RawUrl;
+        Url.TrimStartAndEndInline();
+        bOutRewrote = false;
+
+        if (Url.IsEmpty())
+        {
+            return Url;
+        }
+
+        const FString SchemeDelimiter = TEXT("://");
+        const int32 SchemeIndex = Url.Find(SchemeDelimiter, ESearchCase::IgnoreCase, ESearchDir::FromStart);
+        if (SchemeIndex <= 0)
+        {
+            return Url;
+        }
+
+        const FString Scheme = Url.Left(SchemeIndex);
+        const FString AfterScheme = Url.Mid(SchemeIndex + SchemeDelimiter.Len());
+
+        FString Authority = AfterScheme;
+        FString Path;
+        const int32 SlashIndex = AfterScheme.Find(TEXT("/"));
+        if (SlashIndex != INDEX_NONE)
+        {
+            Authority = AfterScheme.Left(SlashIndex);
+            Path = AfterScheme.Mid(SlashIndex);
+        }
+
+        FString Host = Authority;
+        FString Port;
+
+        if (!Authority.IsEmpty())
+        {
+            const int32 ColonIndex = Authority.Find(TEXT(":"));
+            if (ColonIndex != INDEX_NONE)
+            {
+                Host = Authority.Left(ColonIndex);
+                Port = Authority.Mid(ColonIndex + 1);
+            }
+        }
+
+        if (Scheme.Equals(TEXT("http"), ESearchCase::IgnoreCase))
+        {
+            bOutRewrote = true;
+            return DefaultBackendBaseUrl;
+        }
+
+        if (Scheme.Equals(TEXT("https"), ESearchCase::IgnoreCase))
+        {
+            if (Port.Equals(TEXT("8080")))
+            {
+                bOutRewrote = true;
+                if (!Host.IsEmpty())
+                {
+                    return FString::Printf(TEXT("https://%s%s"), *Host, *Path);
+                }
+                return DefaultBackendBaseUrl;
+            }
+
+            if (Host.Equals(TEXT("34.64.149.81"), ESearchCase::IgnoreCase))
+            {
+                bOutRewrote = true;
+                return DefaultBackendBaseUrl;
+            }
+        }
+
+        return Url;
+    }
 }
 
 void UBombTagGameInstance::Init()
@@ -56,15 +133,46 @@ void UBombTagGameInstance::Init()
     Super::Init();
 
     FString BackendBaseUrl;
-    if (!GConfig->GetString(TEXT("Game.Net"), TEXT("BackendBaseUrl"), BackendBaseUrl, GGameIni))
+    FString ConfigBackendBaseUrl;
+    const bool bHasConfiguredUrl = GConfig->GetString(TEXT("Game.Net"), TEXT("BackendBaseUrl"), ConfigBackendBaseUrl, GGameIni);
+    bool bRewroteConfiguredUrl = false;
+
+    if (!bHasConfiguredUrl)
     {
         BackendBaseUrl = DefaultBackendBaseUrl;
     }
-    else if (!IsBackendBaseUrlValid(BackendBaseUrl))
+    else if (!IsBackendBaseUrlValid(ConfigBackendBaseUrl))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid BackendBaseUrl '%s' in config; using default '%s'"), *BackendBaseUrl, DefaultBackendBaseUrl);
+        UE_LOG(LogTemp, Warning, TEXT("Invalid BackendBaseUrl '%s' in config; using default '%s'"), *ConfigBackendBaseUrl, DefaultBackendBaseUrl);
         BackendBaseUrl = DefaultBackendBaseUrl;
     }
+    else
+    {
+        const FString NormalizedUrl = NormalizeBackendBaseUrl(ConfigBackendBaseUrl, bRewroteConfiguredUrl);
+        FString UrlToUse = NormalizedUrl;
+        if (!IsBackendBaseUrlValid(UrlToUse))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("BackendBaseUrl '%s' normalized to invalid value '%s'; using default '%s'"), *ConfigBackendBaseUrl, *UrlToUse, DefaultBackendBaseUrl);
+            BackendBaseUrl = DefaultBackendBaseUrl;
+            bRewroteConfiguredUrl = false;
+        }
+        else
+        {
+            BackendBaseUrl = UrlToUse;
+        }
+    }
+
+    if (bRewroteConfiguredUrl)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BackendBaseUrl '%s' rewritten to '%s' to match proxy configuration."), *ConfigBackendBaseUrl, *BackendBaseUrl);
+        if (GConfig)
+        {
+            GConfig->SetString(TEXT("Game.Net"), TEXT("BackendBaseUrl"), *BackendBaseUrl, GGameIni);
+            GConfig->Flush(false, GGameIni);
+        }
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("Using backend base URL: %s"), *BackendBaseUrl);
 
     float TimeoutSec = 10.0f;
     GConfig->GetFloat(TEXT("Game.Net"), TEXT("HttpTimeoutSec"), TimeoutSec, GGameIni);
@@ -78,6 +186,14 @@ void UBombTagGameInstance::Init()
     {
         TokenSecret = TEXT("change-me");
     }
+
+    TokenSecret.TrimStartAndEndInline();
+    if (TokenSecret.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MatchStartTokenSecret is empty; defaulting to placeholder value."));
+        TokenSecret = TEXT("change-me");
+    }
+
     MatchStartTokenSecret = TokenSecret;
 
     GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("DedicatedServerId"), DedicatedServerId, GGameIni);
