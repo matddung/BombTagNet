@@ -94,6 +94,40 @@ namespace
         return Port > 0 ? FString::Printf(TEXT("%s:%d"), *Host, Port) : Host;
     }
 
+#if !UE_BUILD_SHIPPING
+    FString DescribeOptionalForLog(const FString& Value, const TCHAR* EmptyLabel = TEXT("<empty>"))
+    {
+        FString Trimmed = Value;
+        Trimmed.TrimStartAndEndInline();
+
+        if (Trimmed.IsEmpty())
+        {
+            return FString(EmptyLabel);
+        }
+
+        return Trimmed;
+    }
+
+    FString DescribeTokenForLog(const FString& Token)
+    {
+        FString Trimmed = Token;
+        Trimmed.TrimStartAndEndInline();
+
+        if (Trimmed.IsEmpty())
+        {
+            return FString(TEXT("<empty>"));
+        }
+
+        const int32 Length = Trimmed.Len();
+        if (Length <= 12)
+        {
+            return FString::Printf(TEXT("%s (len=%d)"), *Trimmed, Length);
+        }
+
+        return FString::Printf(TEXT("%s...%s (len=%d)"), *Trimmed.Left(6), *Trimmed.Right(4), Length);
+    }
+#endif
+
     struct FBombTagMatchStartTokenPayload
     {
         FString Version;
@@ -396,13 +430,34 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
     const FString ExpectedRoomId = GameInstance->GetCurrentRoomId();
     const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
     const FString& RequiredId = !PendingRoomId.IsEmpty() ? PendingRoomId : ExpectedRoomId;
+    const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
+
+#if !UE_BUILD_SHIPPING
+    {
+        const bool bAnyRoomAccepted = PendingRoomId.IsEmpty() && ExpectedRoomId.IsEmpty();
+        const FString RequiredRoomLabel = DescribeOptionalForLog(RequiredId, bAnyRoomAccepted ? TEXT("<any>") : TEXT("<empty>"));
+        const FString ProvidedRoomLabel = DescribeOptionalForLog(RoomId, TEXT("<none>"));
+        const FString PendingRoomLabel = DescribeOptionalForLog(PendingRoomId, TEXT("<none>"));
+        const FString ExpectedRoomLabel = DescribeOptionalForLog(ExpectedRoomId, TEXT("<none>"));
+        const FString IncomingTokenLabel = DescribeTokenForLog(StartToken);
+        const FString ExpectedTokenLabel = DescribeTokenForLog(ExpectedToken);
+
+        UE_LOG(LogTemp, Log, TEXT("[Match][Client] VerifyWithBackend room=%s pendingRoom=%s expectedRoom=%s requiredRoom=%s startToken=%s expectedToken=%s"),
+            *ProvidedRoomLabel,
+            *PendingRoomLabel,
+            *ExpectedRoomLabel,
+            *RequiredRoomLabel,
+            *IncomingTokenLabel,
+            *ExpectedTokenLabel);
+    }
+#endif
+
     if (!RequiredId.IsEmpty() && !RoomId.Equals(RequiredId, ESearchCase::CaseSensitive))
     {
         OutError = TEXT("ROOM_MISMATCH");
         return false;
     }
 
-    const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
     if (!ExpectedToken.IsEmpty() && !StartToken.Equals(ExpectedToken, ESearchCase::CaseSensitive))
     {
         OutError = TEXT("TOKEN_MISMATCH");
@@ -418,6 +473,18 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
         OutError = TEXT("MATCH_START_DENIED 9");
         return false;
     }
+
+#if !UE_BUILD_SHIPPING
+    {
+        const FString PayloadExpirationLabel = DescribeOptionalForLog(TokenPayload.ExpiresAt.ToIso8601(), TEXT("<invalid>"));
+        UE_LOG(LogTemp, Log, TEXT("[Match][Client] Token payload version=%s dsId=%s roomId=%s matchId=%s expiresAt=%s"),
+            *DescribeOptionalForLog(TokenPayload.Version, TEXT("<unknown>")),
+            *DescribeOptionalForLog(TokenPayload.DedicatedServerId, TEXT("<none>")),
+            *DescribeOptionalForLog(TokenPayload.RoomId, TEXT("<none>")),
+            *DescribeOptionalForLog(TokenPayload.MatchId, TEXT("<none>")),
+            *PayloadExpirationLabel);
+    }
+#endif
 
     if (!RequiredId.IsEmpty() && !TokenPayload.RoomId.Equals(RequiredId, ESearchCase::CaseSensitive))
     {
@@ -471,6 +538,17 @@ bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& Star
         OutError = TEXT("MATCH_START_DENIED 15");
         return false;
     }
+
+#if !UE_BUILD_SHIPPING
+    {
+        const FString PayloadExpirationLabel = DescribeOptionalForLog(TokenPayload.ExpiresAt.ToIso8601(), TEXT("<invalid>"));
+        UE_LOG(LogTemp, Log, TEXT("[Match][Client] Backend verification succeeded for room=%s match=%s dsId=%s expiresAt=%s"),
+            *DescribeOptionalForLog(TokenPayload.RoomId, TEXT("<none>")),
+            *DescribeOptionalForLog(TokenPayload.MatchId, TEXT("<none>")),
+            *DescribeOptionalForLog(TokenPayload.DedicatedServerId, TEXT("<none>")),
+            *PayloadExpirationLabel);
+    }
+#endif
 
     OutError.Reset();
     return true;

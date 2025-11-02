@@ -281,11 +281,16 @@ private:
     UFUNCTION() 
     void HandleMatchQueueStatus(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
 
+    UFUNCTION()
+    void HandleBackendTrafficMessage(const FString& Message);
+
     FTimerHandle   MatchDotsTimerHandle;
     int32          MatchDotCount = 1;
     FText          MatchMenuBaseText;
     bool           bAnimateMatchMenuDots = true;
     FTimerHandle   WaitingRoomRefreshTimerHandle;
+    bool           bWaitingRoomHasErrorMessage = false;
+    FString        WaitingRoomLastTrafficMessage;
 
     enum class ERoomRequestType : uint8
     {

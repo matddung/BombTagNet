@@ -3,7 +3,14 @@ server:
   tomcat:
     accesslog:
       enabled: true
+      pattern: "%h %l %u %t \"%r\" %s %b"
+    basedir: .
   forward-headers-strategy: framework
+
+logging:
+  level:
+    org.apache.coyote.http11: DEBUG
+    org.apache.tomcat.util.net: DEBUG
 
 spring:
   jackson:

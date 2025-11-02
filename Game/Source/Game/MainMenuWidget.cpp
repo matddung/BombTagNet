@@ -102,6 +102,9 @@ void UMainMenuWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
+    bWaitingRoomHasErrorMessage = false;
+    WaitingRoomLastTrafficMessage.Reset();
+
     MatchMenuBaseText = NSLOCTEXT("Match", "Searching", "Searching for Match");
 
     if (UWorld* World = GetWorld())
@@ -116,6 +119,7 @@ void UMainMenuWidget::NativeConstruct()
             GI->OnRoomStarted.AddDynamic(this, &UMainMenuWidget::HandleRoomStarted);
             GI->OnRoomClosed.AddDynamic(this, &UMainMenuWidget::HandleRoomClosed);
             GI->OnMatchQueueStatus.AddDynamic(this, &UMainMenuWidget::HandleMatchQueueStatus);
+            GI->OnBackendTraffic.AddDynamic(this, &UMainMenuWidget::HandleBackendTrafficMessage);
 
             if (!bLoginRequested && GI->HasPlayerNickname())
             {
@@ -161,6 +165,7 @@ void UMainMenuWidget::NativeDestruct()
             GI->OnRoomUpdated.RemoveDynamic(this, &UMainMenuWidget::HandleRoomUpdated);
             GI->OnRoomStarted.RemoveDynamic(this, &UMainMenuWidget::HandleRoomStarted);
             GI->OnMatchQueueStatus.RemoveDynamic(this, &UMainMenuWidget::HandleMatchQueueStatus);
+            GI->OnBackendTraffic.RemoveDynamic(this, &UMainMenuWidget::HandleBackendTrafficMessage);
         }
     }
 
@@ -702,16 +707,57 @@ void UMainMenuWidget::ShowErrorMessage(UTextBlock* Target, const FString& Messag
         return;
     }
 
+    const bool bIsWaitingStatus = Target == WaitingRoomMenuStatusText;
+
     if (Message.IsEmpty())
     {
-        Target->SetText(FText::GetEmpty());
+        if (bIsWaitingStatus)
+        {
+            bWaitingRoomHasErrorMessage = false;
+            if (!WaitingRoomLastTrafficMessage.IsEmpty())
+            {
+                Target->SetText(FText::FromString(WaitingRoomLastTrafficMessage));
+            }
+            else
+            {
+                Target->SetText(FText::GetEmpty());
+            }
+        }
+        else
+        {
+            Target->SetText(FText::GetEmpty());
+        }
         Target->SetColorAndOpacity(FSlateColor(FLinearColor::White));
     }
     else
     {
         Target->SetText(FText::FromString(Message));
         Target->SetColorAndOpacity(FSlateColor(FLinearColor::Red));
+        if (bIsWaitingStatus)
+        {
+            bWaitingRoomHasErrorMessage = true;
+        }
     }
+}
+
+void UMainMenuWidget::HandleBackendTrafficMessage(const FString& Message)
+{
+    WaitingRoomLastTrafficMessage = Message;
+
+    if (!WaitingRoomMenuStatusText || bWaitingRoomHasErrorMessage)
+    {
+        return;
+    }
+
+    if (Message.IsEmpty())
+    {
+        WaitingRoomMenuStatusText->SetText(FText::GetEmpty());
+    }
+    else
+    {
+        WaitingRoomMenuStatusText->SetText(FText::FromString(Message));
+    }
+    WaitingRoomMenuStatusText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
 }
 
 void UMainMenuWidget::HandleBackendLogin(bool bSuccess, const FString& ErrorMessage)
@@ -1055,6 +1101,11 @@ void UMainMenuWidget::HandleMatchQueueStatus(bool bSuccess, const FMatchQueueSta
     (void)bSuccess;
     (void)Status;
     (void)ErrorMessage;
+}
+
+void UMainMenuWidget::HandleBackendTrafficMessage(const FString& Message)
+{
+    (void)Message;
 }
 
 #endif

@@ -26,6 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomStarted, bool, bSuccess, con
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomClosed, const FString&, Reason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchQueueStatus, bool, bSuccess, const FMatchQueueStatus&, Status, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnPlayerRecordUpdated, int32, Win, int32, Lose, int32, TotalMatches);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBackendTraffic, const FString&, Message);
 
 UCLASS()
 class GAME_API UBombTagGameInstance : public UGameInstance
@@ -110,6 +111,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Backend")
     FOnMatchQueueStatus OnMatchQueueStatus;
 
+    UPROPERTY(BlueprintAssignable, Category = "Backend")
+    FOnBackendTraffic OnBackendTraffic;
+
 public:
     FString GetCurrentRoomId() const { return CurrentRoomId; }
     FString GetPendingMatchStartToken() const { return PendingMatchStartToken; }
@@ -146,6 +150,7 @@ private:
     void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DSId, int32 QueryPort, const FString& StartTokenExpiresAt);
     FString ChooseMatchHostAddress(const FString& HostPlayer, const FString& HostPublicAddress, const FString& HostInternalAddress) const;
     void BroadcastPlayerRecord();
+    void HandleBackendTraffic(const FString& Message);
 
 private:
     UPROPERTY()

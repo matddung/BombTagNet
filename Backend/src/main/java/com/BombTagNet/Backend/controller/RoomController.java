@@ -8,6 +8,8 @@ import com.BombTagNet.Backend.dto.RoomDto.*;
 import com.BombTagNet.Backend.service.RoomService;
 import com.BombTagNet.Backend.service.RoomService.MatchLaunch;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/rooms")
 public class RoomController {
+    private static final Logger log = LoggerFactory.getLogger(RoomController.class);
     private static final int MIN_PLAYERS = 2;
 
     private final RoomService rooms;
@@ -61,7 +64,7 @@ public class RoomController {
     public ResponseEntity<StartRoomRes> start(HttpServletRequest request, @PathVariable String roomId) {
         Room room = requireRoom(roomId);
         MatchLaunch launch = rooms.start(room, PlayerRequestUtils.requirePlayerId(request), MIN_PLAYERS);
-        return ResponseEntity.ok(new StartRoomRes(
+        StartRoomRes response = new StartRoomRes(
                 launch.matchId(),
                 launch.hostPlayerId(),
                 launch.server().publicAddress(),
@@ -71,7 +74,22 @@ public class RoomController {
                 launch.server().dsId(),
                 launch.startToken(),
                 launch.expiresAt() == null ? null : launch.expiresAt().toString()
-        ));
+        );
+
+        log.info("Issuing StartRoomRes roomId={} matchId={} hostPlayerId={} hostAddress={} hostPort={} hostInternalAddress={} " +
+                        "queryPort={} dedicatedServerId={} startToken={} startTokenExpiresAt={}",
+                room.roomId(),
+                response.matchId(),
+                response.hostPlayerId(),
+                response.hostAddress(),
+                response.hostPort(),
+                response.hostInternalAddress(),
+                response.queryPort(),
+                response.dedicatedServerId(),
+                response.startToken(),
+                response.startTokenExpiresAt());
+
+        return ResponseEntity.ok(response);
     }
 
     private Room requireRoom(String roomId) {

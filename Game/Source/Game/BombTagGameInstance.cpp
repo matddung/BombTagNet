@@ -12,12 +12,47 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/CString.h"
 #include "Misc/ConfigCacheIni.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 namespace
 {
     constexpr int32 PlayerSaveSlotIndex = 0;
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
     const TCHAR* DefaultBackendBaseUrl = TEXT("https://api.studyjun.net/api");
+
+#if !UE_BUILD_SHIPPING
+    FString DescribeOptionalForLog(const FString& Value, const TCHAR* EmptyLabel = TEXT("<empty>"))
+    {
+        FString Trimmed = Value;
+        Trimmed.TrimStartAndEndInline();
+
+        if (Trimmed.IsEmpty())
+        {
+            return FString(EmptyLabel);
+        }
+
+        return Trimmed;
+    }
+
+    FString DescribeTokenForLog(const FString& Token)
+    {
+        FString Trimmed = Token;
+        Trimmed.TrimStartAndEndInline();
+
+        if (Trimmed.IsEmpty())
+        {
+            return FString(TEXT("<empty>"));
+        }
+
+        const int32 Length = Trimmed.Len();
+        if (Length <= 12)
+        {
+            return FString::Printf(TEXT("%s (len=%d)"), *Trimmed, Length);
+        }
+
+        return FString::Printf(TEXT("%s...%s (len=%d)"), *Trimmed.Left(6), *Trimmed.Right(4), Length);
+    }
+#endif
 
     bool IsBackendBaseUrlValid(FString& Url)
     {
@@ -235,6 +270,14 @@ void UBombTagGameInstance::Init()
     if (Api)
     {
         Api->Init(BackendBaseUrl, TimeoutSec);
+        TWeakObjectPtr<UBombTagGameInstance> WeakThis(this);
+        Api->SetTrafficSink([WeakThis](const FString& Message)
+            {
+                if (WeakThis.IsValid())
+                {
+                    WeakThis->HandleBackendTraffic(Message);
+                }
+            });
     }
 
     Room = NewObject<URoomService>(this);
@@ -627,6 +670,27 @@ void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const F
     PendingMatchDedicatedServerId = DSId;
     PendingMatchQueryPort = QueryPort;
     PendingMatchStartTokenExpiresAt = StartTokenExpiresAt;
+
+#if !UE_BUILD_SHIPPING
+    const FString HostPlayerLabel = DescribeOptionalForLog(HostPlayer, TEXT("<unknown>"));
+    const FString PublicLabel = DescribeOptionalForLog(PublicAddress);
+    const FString InternalLabel = DescribeOptionalForLog(InternalAddress);
+    const FString SelectedLabel = DescribeOptionalForLog(SelectedAddress);
+    const FString DsLabel = DescribeOptionalForLog(DSId);
+    const FString ExpirationLabel = DescribeOptionalForLog(StartTokenExpiresAt, TEXT("<unspecified>"));
+    const FString TokenPreview = DescribeTokenForLog(StartToken);
+
+    UE_LOG(LogTemp, Log, TEXT("[Match][Client] PrepareMatchLaunch hostPlayer=%s public=%s internal=%s chosen=%s port=%d queryPort=%d dsId=%s startToken=%s expiresAt=%s"),
+        *HostPlayerLabel,
+        *PublicLabel,
+        *InternalLabel,
+        *SelectedLabel,
+        PendingMatchHostPort,
+        PendingMatchQueryPort,
+        *DsLabel,
+        *TokenPreview,
+        *ExpirationLabel);
+#endif
 }
 
 FString UBombTagGameInstance::GetPendingMatchTravelURL() const
@@ -887,6 +951,14 @@ void UBombTagGameInstance::BroadcastPlayerRecord()
     const int32 WinCount = PlayerSaveGame->Win;
     const int32 LoseCount = PlayerSaveGame->Lose;
     OnPlayerRecordUpdated.Broadcast(WinCount, LoseCount, WinCount + LoseCount);
+}
+
+void UBombTagGameInstance::HandleBackendTraffic(const FString& Message)
+{
+#if !UE_BUILD_SHIPPING
+    UE_LOG(LogTemp, Log, TEXT("[Backend][Traffic] %s"), *Message);
+#endif
+    OnBackendTraffic.Broadcast(Message);
 }
 
 void UBombTagGameInstance::EnsureNicknameIsValid()
