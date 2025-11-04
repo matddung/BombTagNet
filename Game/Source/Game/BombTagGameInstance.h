@@ -128,12 +128,12 @@ public:
     FString GetPendingMatchRoomId() const { return PendingMatchRoomId; }
     FString GetPendingMatchTravelURL() const;
     FString GetEffectiveHostPlayerId() const;
-    FString GetMatchStartTokenSecret() const { return MatchStartTokenSecret; }
     FString GetDedicatedServerId() const { return DedicatedServerId; }
     FString GetDedicatedServerPublicAddress() const { return DedicatedServerPublicAddress; }
     FString GetDedicatedServerInternalAddress() const { return DedicatedServerInternalAddress; }
     int32 GetDedicatedServerGamePort() const { return DedicatedServerGamePort; }
     int32 GetDedicatedServerQueryPort() const { return DedicatedServerQueryPort; }
+    UApiClient* GetApiClient() const { return Api; }
 
 private:
     void LoadOrCreatePlayerData();
@@ -187,7 +187,6 @@ private:
     FString PendingMatchRoomId;
     bool bPreferInternalHostAddress = false;
 
-    FString MatchStartTokenSecret;
     FString DedicatedServerId;
     FString DedicatedServerPublicAddress;
     FString DedicatedServerInternalAddress;

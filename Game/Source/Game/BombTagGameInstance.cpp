@@ -167,6 +167,8 @@ void UBombTagGameInstance::Init()
 {
     Super::Init();
 
+    const bool bIsDedicatedServer = IsRunningDedicatedServer();
+
     FString BackendBaseUrl;
     FString ConfigBackendBaseUrl;
     const bool bHasConfiguredUrl = GConfig->GetString(TEXT("Game.Net"), TEXT("BackendBaseUrl"), ConfigBackendBaseUrl, GGameIni);
@@ -216,21 +218,6 @@ void UBombTagGameInstance::Init()
     GConfig->GetBool(TEXT("Game.Net"), TEXT("bPreferInternalHostAddress"), bPreferInternal, GGameIni);
     bPreferInternalHostAddress = bPreferInternal;
 
-    FString TokenSecret;
-    if (!GConfig->GetString(TEXT("Game.Net"), TEXT("MatchStartTokenSecret"), TokenSecret, GGameIni))
-    {
-        TokenSecret = TEXT("change-me");
-    }
-
-    TokenSecret.TrimStartAndEndInline();
-    if (TokenSecret.IsEmpty())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("MatchStartTokenSecret is empty; defaulting to placeholder value."));
-        TokenSecret = TEXT("change-me");
-    }
-
-    MatchStartTokenSecret = TokenSecret;
-
     GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("DedicatedServerId"), DedicatedServerId, GGameIni);
     GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("PublicAddress"), DedicatedServerPublicAddress, GGameIni);
     GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("InternalAddress"), DedicatedServerInternalAddress, GGameIni);
@@ -264,7 +251,16 @@ void UBombTagGameInstance::Init()
         };
 
     ApplyEnvPort(TEXT("BOMBTAG_DS_GAME_PORT"), DedicatedServerGamePort);
-    ApplyEnvPort(TEXT("BOMBTAG_DS_QUERY_PORT"), DedicatedServerQueryPort); 
+    ApplyEnvPort(TEXT("BOMBTAG_DS_QUERY_PORT"), DedicatedServerQueryPort);
+
+    DedicatedServerId.TrimStartAndEndInline();
+    DedicatedServerPublicAddress.TrimStartAndEndInline();
+    DedicatedServerInternalAddress.TrimStartAndEndInline();
+
+    if (bIsDedicatedServer && !DedicatedServerId.IsEmpty())
+    {
+        PlayerId = DedicatedServerId;
+    }
     
     Api = NewObject<UApiClient>(this);
     if (Api)
@@ -296,7 +292,20 @@ void UBombTagGameInstance::Init()
     PlayerNickname = GetPlayerNickname();
     if (Api)
     {
-        if (!PlayerNickname.IsEmpty())
+        if (bIsDedicatedServer)
+        {
+            FString Identity = DedicatedServerId;
+            if (Identity.IsEmpty())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[Match][Server] DedicatedServerId is empty; API requests will omit identity headers."));
+                Api->ClearLocalPlayerIdentity();
+            }
+            else
+            {
+                Api->SetLocalPlayerIdentity(Identity, Identity);
+            }
+        }
+        else if (!PlayerNickname.IsEmpty())
         {
             Api->SetLocalPlayerIdentity(PlayerNickname, PlayerNickname);
         }

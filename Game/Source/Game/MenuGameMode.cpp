@@ -2,6 +2,7 @@
 #include "BombTagPlayerController.h"
 #include "BombTagGameInstance.h"
 #include "GameModeTravelUtils.h"
+#include "ApiClient.h"
 
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
@@ -9,81 +10,11 @@
 #include "Kismet/GameplayStatics.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
-#include "Misc/Base64.h"
-#include "Misc/SecureHash.h"
-#include "Containers/StringConv.h"
+#include "Serialization/JsonWriter.h"
 #include "Misc/DateTime.h"
-
+#include "UObject/WeakObjectPtrTemplates.h"
 namespace
 {
-    bool TryParseIso8601Relaxed(const FString& Input, FDateTime& OutValue)
-    {
-        if (Input.IsEmpty())
-        {
-            return false;
-        }
-
-        if (FDateTime::ParseIso8601(*Input, OutValue))
-        {
-            return true;
-        }
-
-        FString Trimmed = Input;
-        Trimmed.TrimStartAndEndInline();
-
-        int32 DotIndex = INDEX_NONE;
-        if (!Trimmed.FindChar(TEXT('.'), DotIndex))
-        {
-            return false;
-        }
-
-        int32 SuffixIndex = Trimmed.Len();
-        for (int32 Index = DotIndex + 1; Index < Trimmed.Len(); ++Index)
-        {
-            const TCHAR Char = Trimmed[Index];
-            if (Char == TEXT('Z') || Char == TEXT('+') || Char == TEXT('-'))
-            {
-                SuffixIndex = Index;
-                break;
-            }
-        }
-
-        if (SuffixIndex <= DotIndex + 1)
-        {
-            return false;
-        }
-
-        const FString Prefix = Trimmed.Left(DotIndex + 1);
-        const FString Fraction = Trimmed.Mid(DotIndex + 1, SuffixIndex - DotIndex - 1);
-        const FString Suffix = Trimmed.Mid(SuffixIndex);
-
-        if (Fraction.IsEmpty())
-        {
-            return false;
-        }
-
-        const int32 MaxLength = FMath::Min(9, Fraction.Len());
-        for (int32 Length = MaxLength; Length >= 0; --Length)
-        {
-            FString Candidate;
-            if (Length > 0)
-            {
-                Candidate = Prefix + Fraction.Left(Length) + Suffix;
-            }
-            else
-            {
-                Candidate = Trimmed.Left(DotIndex) + Suffix;
-            }
-
-            if (FDateTime::ParseIso8601(*Candidate, OutValue))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     FString BuildEndpointLabel(const FString& Host, int32 Port)
     {
         if (Host.IsEmpty())
@@ -127,127 +58,6 @@ namespace
         return FString::Printf(TEXT("%s...%s (len=%d)"), *Trimmed.Left(6), *Trimmed.Right(4), Length);
     }
 #endif
-
-    struct FBombTagMatchStartTokenPayload
-    {
-        FString Version;
-        FString DedicatedServerId;
-        FString RoomId;
-        FString MatchId;
-        FDateTime ExpiresAt;
-    };
-
-    bool ParseMatchStartToken(const FString& Token, const FString& Secret, FBombTagMatchStartTokenPayload& OutPayload, FString& OutError)
-    {
-        FString TrimmedToken = Token;
-        TrimmedToken.TrimStartAndEndInline();
-
-        if (TrimmedToken.IsEmpty())
-        {
-            OutError = TEXT("TOKEN_EMPTY");
-            return false;
-        }
-
-        FString TrimmedSecret = Secret;
-        TrimmedSecret.TrimStartAndEndInline();
-
-        if (TrimmedSecret.IsEmpty())
-        {
-            OutError = TEXT("TOKEN_SECRET_UNAVAILABLE");
-            return false;
-        }
-
-        TArray<FString> Segments;
-        TrimmedToken.ParseIntoArray(Segments, TEXT("."), true);
-        if (Segments.Num() != 3)
-        {
-            OutError = TEXT("TOKEN_FORMAT");
-            return false;
-        }
-
-        const FString& Header = Segments[0];
-        const FString& PayloadSegment = Segments[1];
-        const FString& SignatureSegment = Segments[2];
-
-        if (!Header.Equals(TEXT("v1"), ESearchCase::IgnoreCase))
-        {
-            OutError = TEXT("TOKEN_VERSION");
-            return false;
-        }
-
-        const FString Material = FString::Printf(TEXT("%s.%s.%s"), *Header, *PayloadSegment, *TrimmedSecret);
-        FTCHARToUTF8 MaterialUtf8(*Material);
-        const FString ExpectedSignature = FMD5::HashBytes(reinterpret_cast<const uint8*>(MaterialUtf8.Get()), MaterialUtf8.Length()).ToLower();
-        if (!SignatureSegment.Equals(ExpectedSignature, ESearchCase::IgnoreCase))
-        {
-            OutError = TEXT("TOKEN_SIGNATURE");
-            return false;
-        }
-
-        FString NormalizedPayload = PayloadSegment;
-        NormalizedPayload.ReplaceInline(TEXT("-"), TEXT("+"));
-        NormalizedPayload.ReplaceInline(TEXT("_"), TEXT("/"));
-
-        while ((NormalizedPayload.Len() % 4) != 0)
-        {
-            NormalizedPayload.AppendChar(TEXT('='));
-        }
-
-        TArray<uint8> PayloadBytes;
-        if (!FBase64::Decode(NormalizedPayload, PayloadBytes))
-        {
-            OutError = TEXT("TOKEN_DECODE");
-            return false;
-        }
-
-        FUTF8ToTCHAR Converter(reinterpret_cast<const char*>(PayloadBytes.GetData()), PayloadBytes.Num());
-        FString PayloadString(Converter.Get(), Converter.Length());
-
-        TSharedPtr<FJsonObject> PayloadObject;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(PayloadString);
-        if (!FJsonSerializer::Deserialize(Reader, PayloadObject) || !PayloadObject.IsValid())
-        {
-            OutError = TEXT("TOKEN_JSON");
-            return false;
-        }
-
-        FString DsId;
-        FString RoomId;
-        FString MatchId;
-        FString ExpirationText;
-        if (!PayloadObject->TryGetStringField(TEXT("dsId"), DsId) ||
-            !PayloadObject->TryGetStringField(TEXT("roomId"), RoomId) ||
-            !PayloadObject->TryGetStringField(TEXT("matchId"), MatchId) ||
-            !PayloadObject->TryGetStringField(TEXT("exp"), ExpirationText))
-        {
-            OutError = TEXT("TOKEN_FIELDS");
-            return false;
-        }
-
-        DsId.TrimStartAndEndInline();
-        RoomId.TrimStartAndEndInline();
-        MatchId.TrimStartAndEndInline();
-        ExpirationText.TrimStartAndEndInline();
-        if (DsId.IsEmpty() || RoomId.IsEmpty() || MatchId.IsEmpty() || ExpirationText.IsEmpty())
-        {
-            OutError = TEXT("TOKEN_FIELDS");
-            return false;
-        }
-
-        FDateTime ExpirationValue;
-        if (!TryParseIso8601Relaxed(ExpirationText, ExpirationValue))
-        {
-            OutError = TEXT("TOKEN_EXP_PARSE");
-            return false;
-        }
-
-        OutPayload.Version = Header;
-        OutPayload.DedicatedServerId = DsId;
-        OutPayload.RoomId = RoomId;
-        OutPayload.MatchId = MatchId;
-        OutPayload.ExpiresAt = ExpirationValue;
-        return true;
-    }
 
     int32 ResolveLocalServerPort(const UWorld* World)
     {
@@ -331,36 +141,7 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
         return;
     }
 
-    FString VerificationError;
-    if (!VerifyWithBackend(RoomId, StartToken, VerificationError))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend verification failed: %s"), *VerificationError);
-        const FString DeniedCode = VerificationError.IsEmpty() ? FString(TEXT("MATCH_START_DENIED 6")) : VerificationError;
-        RequestingController->ClientNotifyMatchStartDenied(DeniedCode);
-        return;
-    }
-
-    FString ExpectedHost;
-    int32 ExpectedPort = 0;
-    FString TravelURL;
-    if (const UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
-    {
-        ExpectedHost = GameInstance->GetPendingMatchHostAddress();
-        ExpectedPort = GameInstance->GetPendingMatchHostPort();
-        TravelURL = GameInstance->GetPendingMatchTravelURL();
-    }
-
-    if (ExpectedHost.IsEmpty() || ExpectedPort <= 0 || TravelURL.IsEmpty())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (host=%s port=%d url=%s)."), *ExpectedHost, ExpectedPort, *TravelURL);
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 7"));
-        return;
-    }
-
-    const FString EndpointLabel = BuildEndpointLabel(ExpectedHost, ExpectedPort);
-    UE_LOG(LogTemp, Log, TEXT("[Match] Host %s approved match start for room %s. Directing clients to %s."), *GetNameSafe(RequestingController), *RoomId, *EndpointLabel);
-
-    SendClientsToMatch(TravelURL);
+    VerifyStartTokenWithBackend(RequestingController, RoomId, StartToken);
 }
 
 void AMenuGameMode::SendClientsToMatch(const FString& TravelURL)
@@ -386,6 +167,298 @@ void AMenuGameMode::SendClientsToMatch(const FString& TravelURL)
             PC->ClientTravel(TravelURL, ETravelType::TRAVEL_Absolute);
         }
     }
+}
+
+void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* RequestingController, const FString& RoomId, const FString& StartToken)
+{
+    if (!RequestingController)
+    {
+        return;
+    }
+
+    UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance());
+    if (!GameInstance)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: game instance unavailable."));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 8"));
+        return;
+    }
+
+    UApiClient* ApiClient = GameInstance->GetApiClient();
+    if (!ApiClient)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: API client unavailable."));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 9"));
+        return;
+    }
+
+    const FString ExpectedRoomId = GameInstance->GetCurrentRoomId();
+    const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
+    const FString& RequiredRoomId = !PendingRoomId.IsEmpty() ? PendingRoomId : ExpectedRoomId;
+    const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
+
+#if !UE_BUILD_SHIPPING
+    {
+        const bool bAnyRoomAccepted = PendingRoomId.IsEmpty() && ExpectedRoomId.IsEmpty();
+        const FString RequiredRoomLabel = DescribeOptionalForLog(RequiredRoomId, bAnyRoomAccepted ? TEXT("<any>") : TEXT("<empty>"));
+        const FString ProvidedRoomLabel = DescribeOptionalForLog(RoomId, TEXT("<none>"));
+        const FString PendingRoomLabel = DescribeOptionalForLog(PendingRoomId, TEXT("<none>"));
+        const FString ExpectedRoomLabel = DescribeOptionalForLog(ExpectedRoomId, TEXT("<none>"));
+        const FString IncomingTokenLabel = DescribeTokenForLog(StartToken);
+        const FString ExpectedTokenLabel = DescribeTokenForLog(ExpectedToken);
+
+        UE_LOG(LogTemp, Log, TEXT("[Match][Server] VerifyStartToken request room=%s pendingRoom=%s expectedRoom=%s requiredRoom=%s startToken=%s expectedToken=%s"),
+            *ProvidedRoomLabel,
+            *PendingRoomLabel,
+            *ExpectedRoomLabel,
+            *RequiredRoomLabel,
+            *IncomingTokenLabel,
+            *ExpectedTokenLabel);
+    }
+#endif
+
+    if (!RequiredRoomId.IsEmpty() && !RoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: room mismatch (expected=%s provided=%s)."), *RequiredRoomId, *RoomId);
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("ROOM_MISMATCH"));
+        return;
+    }
+
+    if (!ExpectedToken.IsEmpty() && !StartToken.Equals(ExpectedToken, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: token mismatch."));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("TOKEN_MISMATCH"));
+        return;
+    }
+
+    TSharedRef<FJsonObject> Payload = MakeShared<FJsonObject>();
+    FString DedicatedServerId = GameInstance->GetDedicatedServerId();
+    if (DedicatedServerId.IsEmpty())
+    {
+        DedicatedServerId = GameInstance->GetPendingMatchDedicatedServerId();
+    }
+
+    if (!DedicatedServerId.IsEmpty())
+    {
+        Payload->SetStringField(TEXT("dsId"), DedicatedServerId);
+    }
+
+    if (!RoomId.IsEmpty())
+    {
+        Payload->SetStringField(TEXT("roomId"), RoomId);
+    }
+
+    const FString MatchIdentifier = ResolveMatchIdentifierForVerification(GameInstance, RoomId);
+    if (!MatchIdentifier.IsEmpty())
+    {
+        Payload->SetStringField(TEXT("matchId"), MatchIdentifier);
+    }
+
+    Payload->SetStringField(TEXT("startToken"), StartToken);
+
+    FString Content;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Content);
+    if (!FJsonSerializer::Serialize(Payload, Writer))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: failed to serialize verification payload."));
+        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 9"));
+        return;
+    }
+
+    TWeakObjectPtr<ABombTagPlayerController> WeakController(RequestingController);
+
+    FOnApiResponse Response;
+    Response.BindLambda([this, WeakController, RoomId, StartToken](bool bOk, const FString& BodyOrError)
+        {
+            HandleVerifyStartTokenResponse(WeakController, RoomId, StartToken, bOk, BodyOrError);
+        });
+
+    ApiClient->PostJson(TEXT("/ds/matches/verify-start"), Content, MoveTemp(Response));
+}
+
+void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayerController> RequestingController, const FString& RoomId, const FString& StartToken, bool bOk, const FString& BodyOrError)
+{
+    ABombTagPlayerController* Controller = RequestingController.Get();
+    if (!Controller)
+    {
+        return;
+    }
+
+    UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance());
+    if (!GameInstance)
+    {
+        Controller->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 8"));
+        return;
+    }
+
+    auto Reject = [Controller](const FString& Code)
+        {
+            const FString& CodeToSend = Code.IsEmpty() ? FString(TEXT("MATCH_START_DENIED 6")) : Code;
+            Controller->ClientNotifyMatchStartDenied(CodeToSend);
+        };
+
+    if (!bOk)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend verification HTTP error: %s"), *BodyOrError);
+        Reject(TEXT("MATCH_START_DENIED 6"));
+        return;
+    }
+
+    TSharedPtr<FJsonObject> RootObject;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
+    if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend verification returned invalid JSON."));
+        Reject(TEXT("MATCH_START_DENIED 9"));
+        return;
+    }
+
+    bool bResponseSuccess = false;
+    RootObject->TryGetBoolField(TEXT("success"), bResponseSuccess);
+
+    FString ErrorCode;
+    RootObject->TryGetStringField(TEXT("error"), ErrorCode);
+
+    FString ResponseRoomId;
+    RootObject->TryGetStringField(TEXT("roomId"), ResponseRoomId);
+    FString ResponseMatchId;
+    RootObject->TryGetStringField(TEXT("matchId"), ResponseMatchId);
+    FString ResponseDedicatedServerId;
+    RootObject->TryGetStringField(TEXT("dedicatedServerId"), ResponseDedicatedServerId);
+    FString ResponseExpiresAt;
+    RootObject->TryGetStringField(TEXT("expiresAt"), ResponseExpiresAt);
+
+    if (!bResponseSuccess)
+    {
+        const FString DeniedCode = ErrorCode.IsEmpty() ? FString(TEXT("MATCH_START_DENIED 9")) : ErrorCode;
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend rejected start token: %s"), *DeniedCode);
+        Reject(DeniedCode);
+        return;
+    }
+
+#if !UE_BUILD_SHIPPING
+    {
+        const FString PayloadExpirationLabel = DescribeOptionalForLog(ResponseExpiresAt, TEXT("<invalid>"));
+        UE_LOG(LogTemp, Log, TEXT("[Match][Server] Backend verified token room=%s match=%s dsId=%s expiresAt=%s"),
+            *DescribeOptionalForLog(ResponseRoomId, TEXT("<none>")),
+            *DescribeOptionalForLog(ResponseMatchId, TEXT("<none>")),
+            *DescribeOptionalForLog(ResponseDedicatedServerId, TEXT("<none>")),
+            *PayloadExpirationLabel);
+    }
+#endif
+
+    const FString ExpectedRoomId = GameInstance->GetCurrentRoomId();
+    const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
+    const FString& RequiredRoomId = !PendingRoomId.IsEmpty() ? PendingRoomId : ExpectedRoomId;
+    const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
+
+    if (!RequiredRoomId.IsEmpty() && !RoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied after verify: room mismatch."));
+        Reject(TEXT("ROOM_MISMATCH"));
+        return;
+    }
+
+    if (!ExpectedToken.IsEmpty() && !StartToken.Equals(ExpectedToken, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied after verify: token changed."));
+        Reject(TEXT("TOKEN_MISMATCH"));
+        return;
+    }
+
+    if (!RequiredRoomId.IsEmpty() && !ResponseRoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token room mismatch: expected=%s response=%s"), *RequiredRoomId, *ResponseRoomId);
+        Reject(TEXT("MATCH_START_DENIED 10"));
+        return;
+    }
+
+    const FString ExpectedMatchId = ResolveMatchIdentifierForVerification(GameInstance, RoomId);
+    if (!ExpectedMatchId.IsEmpty() && !ResponseMatchId.Equals(ExpectedMatchId, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token match mismatch: expected=%s response=%s"), *ExpectedMatchId, *ResponseMatchId);
+        Reject(TEXT("MATCH_START_DENIED 11"));
+        return;
+    }
+
+    FString RequiredDedicatedServerId = GameInstance->GetPendingMatchDedicatedServerId();
+    if (RequiredDedicatedServerId.IsEmpty())
+    {
+        RequiredDedicatedServerId = GameInstance->GetDedicatedServerId();
+    }
+
+    if (!RequiredDedicatedServerId.IsEmpty() && !ResponseDedicatedServerId.Equals(RequiredDedicatedServerId, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token DS mismatch: expected=%s response=%s"), *RequiredDedicatedServerId, *ResponseDedicatedServerId);
+        Reject(TEXT("MATCH_START_DENIED 12"));
+        return;
+    }
+
+    if (!ResponseExpiresAt.IsEmpty())
+    {
+        FDateTime ExpirationUtc;
+        if (FDateTime::ParseIso8601(*ResponseExpiresAt, ExpirationUtc))
+        {
+            if (ExpirationUtc <= FDateTime::UtcNow())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token already expired at %s"), *ResponseExpiresAt);
+                Reject(TEXT("MATCH_START_DENIED 14"));
+                return;
+            }
+        }
+    }
+
+    FString ExpectedHost = GameInstance->GetPendingMatchHostAddress();
+    int32 ExpectedPort = GameInstance->GetPendingMatchHostPort();
+    FString TravelURL = GameInstance->GetPendingMatchTravelURL();
+
+    if (ExpectedHost.IsEmpty() || ExpectedPort <= 0 || TravelURL.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (host=%s port=%d url=%s)."), *ExpectedHost, ExpectedPort, *TravelURL);
+        Reject(TEXT("MATCH_START_DENIED 7"));
+        return;
+    }
+
+    int32 ConfiguredPort = GameInstance->GetDedicatedServerGamePort();
+    if (ConfiguredPort <= 0)
+    {
+        ConfiguredPort = ExpectedPort;
+    }
+
+    const int32 LocalBoundPort = ResolveLocalServerPort(GetWorld());
+    if (ConfiguredPort > 0 && LocalBoundPort > 0 && ConfiguredPort != LocalBoundPort)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Dedicated server port mismatch: expected %d actual %d"), ConfiguredPort, LocalBoundPort);
+        Reject(TEXT("MATCH_START_DENIED 15"));
+        return;
+    }
+
+    const FString EndpointLabel = BuildEndpointLabel(ExpectedHost, ExpectedPort);
+    UE_LOG(LogTemp, Log, TEXT("[Match] Host %s approved match start for room %s. Directing clients to %s."), *GetNameSafe(Controller), *RoomId, *EndpointLabel);
+
+    SendClientsToMatch(TravelURL);
+}
+
+FString AMenuGameMode::ResolveMatchIdentifierForVerification(const UBombTagGameInstance* GameInstance, const FString& RoomId) const
+{
+    if (!GameInstance)
+    {
+        return FString();
+    }
+
+    const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
+    if (!PendingRoomId.IsEmpty())
+    {
+        return PendingRoomId;
+    }
+
+    const FString CurrentRoomId = GameInstance->GetCurrentRoomId();
+    if (!CurrentRoomId.IsEmpty())
+    {
+        return CurrentRoomId;
+    }
+
+    return RoomId;
 }
 
 bool AMenuGameMode::HasHostAuthority(const ABombTagPlayerController* RequestingController) const
@@ -416,140 +489,4 @@ bool AMenuGameMode::HasHostAuthority(const ABombTagPlayerController* RequestingC
     }
 
     return false;
-}
-
-bool AMenuGameMode::VerifyWithBackend(const FString& RoomId, const FString& StartToken, FString& OutError) const
-{
-    const UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance());
-    if (!GameInstance)
-    {
-        OutError = TEXT("MATCH_START_DENIED 8");
-        return false;
-    }
-
-    const FString ExpectedRoomId = GameInstance->GetCurrentRoomId();
-    const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
-    const FString& RequiredId = !PendingRoomId.IsEmpty() ? PendingRoomId : ExpectedRoomId;
-    const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
-
-#if !UE_BUILD_SHIPPING
-    {
-        const bool bAnyRoomAccepted = PendingRoomId.IsEmpty() && ExpectedRoomId.IsEmpty();
-        const FString RequiredRoomLabel = DescribeOptionalForLog(RequiredId, bAnyRoomAccepted ? TEXT("<any>") : TEXT("<empty>"));
-        const FString ProvidedRoomLabel = DescribeOptionalForLog(RoomId, TEXT("<none>"));
-        const FString PendingRoomLabel = DescribeOptionalForLog(PendingRoomId, TEXT("<none>"));
-        const FString ExpectedRoomLabel = DescribeOptionalForLog(ExpectedRoomId, TEXT("<none>"));
-        const FString IncomingTokenLabel = DescribeTokenForLog(StartToken);
-        const FString ExpectedTokenLabel = DescribeTokenForLog(ExpectedToken);
-
-        UE_LOG(LogTemp, Log, TEXT("[Match][Client] VerifyWithBackend room=%s pendingRoom=%s expectedRoom=%s requiredRoom=%s startToken=%s expectedToken=%s"),
-            *ProvidedRoomLabel,
-            *PendingRoomLabel,
-            *ExpectedRoomLabel,
-            *RequiredRoomLabel,
-            *IncomingTokenLabel,
-            *ExpectedTokenLabel);
-    }
-#endif
-
-    if (!RequiredId.IsEmpty() && !RoomId.Equals(RequiredId, ESearchCase::CaseSensitive))
-    {
-        OutError = TEXT("ROOM_MISMATCH");
-        return false;
-    }
-
-    if (!ExpectedToken.IsEmpty() && !StartToken.Equals(ExpectedToken, ESearchCase::CaseSensitive))
-    {
-        OutError = TEXT("TOKEN_MISMATCH");
-        return false;
-    }
-
-    FBombTagMatchStartTokenPayload TokenPayload;
-    FString TokenParseError;
-    const FString TokenSecret = GameInstance->GetMatchStartTokenSecret();
-    if (!ParseMatchStartToken(StartToken, TokenSecret, TokenPayload, TokenParseError))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Start token verification failed: %s"), *TokenParseError);
-        OutError = TEXT("MATCH_START_DENIED 9");
-        return false;
-    }
-
-#if !UE_BUILD_SHIPPING
-    {
-        const FString PayloadExpirationLabel = DescribeOptionalForLog(TokenPayload.ExpiresAt.ToIso8601(), TEXT("<invalid>"));
-        UE_LOG(LogTemp, Log, TEXT("[Match][Client] Token payload version=%s dsId=%s roomId=%s matchId=%s expiresAt=%s"),
-            *DescribeOptionalForLog(TokenPayload.Version, TEXT("<unknown>")),
-            *DescribeOptionalForLog(TokenPayload.DedicatedServerId, TEXT("<none>")),
-            *DescribeOptionalForLog(TokenPayload.RoomId, TEXT("<none>")),
-            *DescribeOptionalForLog(TokenPayload.MatchId, TEXT("<none>")),
-            *PayloadExpirationLabel);
-    }
-#endif
-
-    if (!RequiredId.IsEmpty() && !TokenPayload.RoomId.Equals(RequiredId, ESearchCase::CaseSensitive))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Token room mismatch: expected %s but token has %s"), *RequiredId, *TokenPayload.RoomId);
-        OutError = TEXT("MATCH_START_DENIED 10");
-        return false;
-    }
-
-    const FString ExpectedMatchId = !PendingRoomId.IsEmpty() ? PendingRoomId : RoomId;
-    if (!ExpectedMatchId.IsEmpty() && !TokenPayload.MatchId.Equals(ExpectedMatchId, ESearchCase::CaseSensitive))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Token match mismatch: expected %s but token has %s"), *ExpectedMatchId, *TokenPayload.MatchId);
-        OutError = TEXT("MATCH_START_DENIED 11");
-        return false;
-    }
-
-    const FString PendingDedicatedServerId = GameInstance->GetPendingMatchDedicatedServerId();
-    if (!PendingDedicatedServerId.IsEmpty() && !TokenPayload.DedicatedServerId.Equals(PendingDedicatedServerId, ESearchCase::CaseSensitive))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Token DS mismatch: pending=%s token=%s"), *PendingDedicatedServerId, *TokenPayload.DedicatedServerId);
-        OutError = TEXT("MATCH_START_DENIED 12");
-        return false;
-    }
-
-    const FString LocalDedicatedServerId = GameInstance->GetDedicatedServerId();
-    if (!LocalDedicatedServerId.IsEmpty() && !TokenPayload.DedicatedServerId.Equals(LocalDedicatedServerId, ESearchCase::CaseSensitive))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Local DS id %s does not match token %s"), *LocalDedicatedServerId, *TokenPayload.DedicatedServerId);
-        OutError = TEXT("MATCH_START_DENIED 13");
-        return false;
-    }
-
-    const FDateTime NowUtc = FDateTime::UtcNow();
-    if (TokenPayload.ExpiresAt <= NowUtc)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Start token expired at %s (now=%s)"), *TokenPayload.ExpiresAt.ToIso8601(), *NowUtc.ToIso8601());
-        OutError = TEXT("MATCH_START_DENIED 14");
-        return false;
-    }
-
-    const int32 LocalBoundPort = ResolveLocalServerPort(GetWorld());
-    int32 ExpectedPort = GameInstance->GetDedicatedServerGamePort();
-    if (ExpectedPort <= 0)
-    {
-        ExpectedPort = GameInstance->GetPendingMatchHostPort();
-    }
-
-    if (ExpectedPort > 0 && LocalBoundPort > 0 && ExpectedPort != LocalBoundPort)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Dedicated server port mismatch: expected %d actual %d"), ExpectedPort, LocalBoundPort);
-        OutError = TEXT("MATCH_START_DENIED 15");
-        return false;
-    }
-
-#if !UE_BUILD_SHIPPING
-    {
-        const FString PayloadExpirationLabel = DescribeOptionalForLog(TokenPayload.ExpiresAt.ToIso8601(), TEXT("<invalid>"));
-        UE_LOG(LogTemp, Log, TEXT("[Match][Client] Backend verification succeeded for room=%s match=%s dsId=%s expiresAt=%s"),
-            *DescribeOptionalForLog(TokenPayload.RoomId, TEXT("<none>")),
-            *DescribeOptionalForLog(TokenPayload.MatchId, TEXT("<none>")),
-            *DescribeOptionalForLog(TokenPayload.DedicatedServerId, TEXT("<none>")),
-            *PayloadExpirationLabel);
-    }
-#endif
-
-    OutError.Reset();
-    return true;
 }
