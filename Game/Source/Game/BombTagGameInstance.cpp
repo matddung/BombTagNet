@@ -552,7 +552,7 @@ void UBombTagGameInstance::Backend_GetRoom()
             {
                 bRoomHasStarted = true;
                 PendingMatchRoomId = RoomSummary.RoomId;
-                PrepareMatchLaunch(RoomSummary.HostId, RoomSummary.DedicatedServerAddress, RoomSummary.DedicatedServerPort, RoomSummary.StartToken, RoomSummary.DedicatedServerId, RoomSummary.StartTokenExpiresAt);
+                PrepareMatchLaunch(RoomSummary.DedicatedServerAddress, RoomSummary.DedicatedServerPort, RoomSummary.StartToken, RoomSummary.DedicatedServerId, RoomSummary.StartTokenExpiresAt);
                 OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
             }
         });
@@ -576,7 +576,6 @@ void UBombTagGameInstance::ResetMatchQueueState()
     bHasMatchQueueStatus = false;
     CachedMatchQueueStatus = FMatchQueueStatus();
     bMatchQueueLaunched = false;
-    PendingMatchHostPlayerId.Reset();
     PendingMatchServerAddress.Reset();
     PendingMatchServerPort = 0;
     PendingMatchStartToken.Reset();
@@ -631,7 +630,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
         {
             bMatchQueueLaunched = true;
             PendingMatchRoomId = Status.MatchId;
-            PrepareMatchLaunch(Status.HostPlayerId, Status.DedicatedServerAddress, Status.DedicatedServerPort, Status.StartToken, Status.DedicatedServerId, Status.StartTokenExpiresAt);
+            PrepareMatchLaunch(Status.DedicatedServerAddress, Status.DedicatedServerPort, Status.StartToken, Status.DedicatedServerId, Status.StartTokenExpiresAt);
             RequestServerMatchStart();
         }
         return;
@@ -652,18 +651,8 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
     StartMatchQueuePolling();
 }
 
-void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt)
+void UBombTagGameInstance::PrepareMatchLaunch(const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt)
 {
-    PendingMatchHostPlayerId = HostPlayer;
-    if (PendingMatchHostPlayerId.IsEmpty())
-    {
-        const FString LocalId = GetLocalPlayerId();
-        if (!LocalId.IsEmpty())
-        {
-            PendingMatchHostPlayerId = LocalId;
-        }
-    }
-
     FString ResolvedAddress = DedicatedServerAddress;
     ResolvedAddress.TrimStartAndEndInline();
 
@@ -674,14 +663,12 @@ void UBombTagGameInstance::PrepareMatchLaunch(const FString& HostPlayer, const F
     PendingMatchStartTokenExpiresAt = StartTokenExpiresAt;
 
 #if !UE_BUILD_SHIPPING
-    const FString HostPlayerLabel = DescribeOptionalForLog(PendingMatchHostPlayerId, TEXT("<unknown>"));
     const FString AddressLabel = DescribeOptionalForLog(ResolvedAddress);
     const FString DsLabel = DescribeOptionalForLog(DSId);
     const FString ExpirationLabel = DescribeOptionalForLog(StartTokenExpiresAt, TEXT("<unspecified>"));
     const FString TokenPreview = DescribeTokenForLog(StartToken);
 
-    UE_LOG(LogTemp, Log, TEXT("[Match][Client] PrepareMatchLaunch hostPlayer=%s serverAddress=%s port=%d dsId=%s startToken=%s expiresAt=%s"),
-        *HostPlayerLabel,
+    UE_LOG(LogTemp, Log, TEXT("[Match][Client] PrepareMatchLaunch serverAddress=%s port=%d dsId=%s startToken=%s expiresAt=%s"),
         *AddressLabel,
         PendingMatchServerPort,
         *DsLabel,
@@ -753,11 +740,10 @@ void UBombTagGameInstance::Backend_StartRoom()
                 return;
             }
 
-            const FString EffectiveHostId = !Info.HostPlayerId.IsEmpty() ? Info.HostPlayerId : GetLocalPlayerId();
-            UE_LOG(LogTemp, Log, TEXT("MatchId=%s host=%s dedicatedAddress=%s port=%d"), *Info.MatchId, *EffectiveHostId, *Info.DedicatedServerAddress, Info.DedicatedServerPort);
+            UE_LOG(LogTemp, Log, TEXT("MatchId=%s dedicatedAddress=%s port=%d dsId=%s"), *Info.MatchId, *Info.DedicatedServerAddress, Info.DedicatedServerPort, *Info.DedicatedServerId);
             bRoomHasStarted = true;
             PendingMatchRoomId = Info.MatchId.IsEmpty() ? CurrentRoomId : Info.MatchId;
-            PrepareMatchLaunch(EffectiveHostId, Info.DedicatedServerAddress, Info.DedicatedServerPort, Info.StartToken, Info.DedicatedServerId, Info.StartTokenExpiresAt);
+            PrepareMatchLaunch(Info.DedicatedServerAddress, Info.DedicatedServerPort, Info.StartToken, Info.DedicatedServerId, Info.StartTokenExpiresAt);
             OnRoomStarted.Broadcast(true, Info.MatchId);
         });
 }
@@ -845,8 +831,8 @@ void UBombTagGameInstance::RequestServerMatchStart()
         {
             if (ABombTagPlayerController* BTPC = Cast<ABombTagPlayerController>(PC))
             {
-                const FString HostId = GetEffectiveHostPlayerId();
-                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting dedicated match start via RPC (room=%s host=%s url=%s)."), *RoomIdentifier, *HostId, *TravelURL);
+                const FString DsLabel = !PendingMatchDedicatedServerId.IsEmpty() ? PendingMatchDedicatedServerId : TEXT("<unknown-ds>");
+                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting dedicated match start via RPC (room=%s dedicatedServerId=%s url=%s)."), *RoomIdentifier, *DsLabel, *TravelURL);
                 BTPC->ServerRequestStartMatch(RoomIdentifier, PendingMatchStartToken);
             }
             else
@@ -946,26 +932,6 @@ bool UBombTagGameInstance::IsAsciiAlphanumeric(TCHAR Character) const
     return (Character >= '0' && Character <= '9') ||
         (Character >= 'A' && Character <= 'Z') ||
         (Character >= 'a' && Character <= 'z');
-}
-
-FString UBombTagGameInstance::GetEffectiveHostPlayerId() const
-{
-    if (!PendingMatchHostPlayerId.IsEmpty())
-    {
-        return PendingMatchHostPlayerId;
-    }
-
-    if (!PlayerId.IsEmpty())
-    {
-        return PlayerId;
-    }
-
-    if (!PlayerNickname.IsEmpty())
-    {
-        return PlayerNickname;
-    }
-
-    return FString(TEXT("UNKNOWN_HOST"));
 }
 
 void UBombTagGameInstance::Deprecated_ClientTravelToMatch()

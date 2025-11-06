@@ -43,9 +43,8 @@ void ABombTagGameMode::BeginPlay()
 {
     Super::BeginPlay();
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
-    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
-    // 매치 시작 시점에 맵/게임모드/시즌리스 설정을 모두 로그로 남겨 추적한다.
-    UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s Owner=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *OwnerId);
+    const FString DedicatedServerLabel = BombTag::GameMode::ResolveDedicatedServerLabel(Cast<UBombTagGameInstance>(GetGameInstance()));
+    UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s DedicatedServer=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *DedicatedServerLabel);
     BeginStartCountdown();
 }
 
@@ -366,9 +365,8 @@ void ABombTagGameMode::HandleReturnToMenu()
     BombTag::GameMode::ExtractTravelTargets(MenuReturnURL, MapName, GameModePath);
     bUseSeamlessTravel = true;
 
-    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
-    // 서버만이 트래블을 수행하며, 동일한 포맷으로 로그를 남겨 클라이언트 추종 여부를 검증한다.
-    UE_LOG(LogTemp, Log, TEXT("[Match] ServerTravel to %s (Map=%s GameMode=%s Owner=%s Seamless=%s)"), *MenuReturnURL, *MapName, *GameModePath, *OwnerId, bUseSeamlessTravel ? TEXT("true") : TEXT("false"));
+    const FString DedicatedServerLabel = BombTag::GameMode::ResolveDedicatedServerLabel(Cast<UBombTagGameInstance>(GetGameInstance()));
+    UE_LOG(LogTemp, Log, TEXT("[Match] ServerTravel to %s (Map=%s GameMode=%s DedicatedServer=%s Seamless=%s)"), *MenuReturnURL, *MapName, *GameModePath, *DedicatedServerLabel, bUseSeamlessTravel ? TEXT("true") : TEXT("false"));
 
     if (UWorld* World = GetWorld())
     {

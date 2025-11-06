@@ -90,9 +90,6 @@ struct GAME_API FMatchStartInfo
     FString MatchId;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
-    FString HostPlayerId;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString DedicatedServerAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")

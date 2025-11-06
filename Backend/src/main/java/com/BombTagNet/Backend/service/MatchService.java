@@ -22,7 +22,7 @@ public class MatchService {
         CANCELLED
     }
 
-    public record MatchInfo(String matchId, List<Player> players, String hostPlayerId, String dedicatedServerId,
+    public record MatchInfo(String matchId, List<Player> players, String dedicatedServerId,
                             String dedicatedServerAddress, int dedicatedServerPort,
                             String startToken, Instant startTokenExpiresAt) {
     }
@@ -37,7 +37,6 @@ public class MatchService {
             Integer maxPlayers,
             String matchId,
             List<Player> players,
-            String hostPlayerId,
             String dedicatedServerId,
             String dedicatedServerAddress,
             Integer dedicatedServerPort,
@@ -228,15 +227,12 @@ public class MatchService {
         DedicatedServerRecord server = serverOpt.get();
 
         List<Player> players = match.players();
-        MatchTicket hostTicket = match.tickets.isEmpty() ? null : match.tickets.get(0);
-        String hostPlayerId = hostTicket == null ? null : hostTicket.player.playerId();
 
         MatchTokenService.IssuedToken token = tokens.issueToken(server.dsId(), match.matchId, match.matchId);
 
         MatchInfo info = new MatchInfo(
                 match.matchId,
                 players,
-                hostPlayerId,
                 server.dsId(),
                 server.publicAddress(),
                 server.gamePort(),
@@ -263,7 +259,6 @@ public class MatchService {
         Integer readyIn = null;
         String matchId = null;
         List<Player> players = List.of();
-        String hostPlayerId = null;
         String dedicatedServerAddress = null;
         Integer dedicatedServerPort = null;
         String dedicatedServerId = null;
@@ -283,7 +278,6 @@ public class MatchService {
             if (ticket.matchInfo != null) {
                 matchId = ticket.matchInfo.matchId();
                 players = ticket.matchInfo.players();
-                hostPlayerId = ticket.matchInfo.hostPlayerId();
                 dedicatedServerAddress = ticket.matchInfo.dedicatedServerAddress();
                 dedicatedServerPort = ticket.matchInfo.dedicatedServerPort() > 0 ? ticket.matchInfo.dedicatedServerPort() : null;
                 dedicatedServerId = ticket.matchInfo.dedicatedServerId();
@@ -302,7 +296,6 @@ public class MatchService {
                 MAX_PLAYERS,
                 matchId,
                 List.copyOf(players),
-                hostPlayerId,
                 dedicatedServerId,
                 dedicatedServerAddress,
                 dedicatedServerPort,

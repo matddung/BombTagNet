@@ -24,7 +24,6 @@ public class MatchDto {
             Integer maxPlayers,
             String matchId,
             List<Player> players,
-            String hostPlayerId,
             String dedicatedServerId,
             String dedicatedServerAddress,
             Integer dedicatedServerPort,

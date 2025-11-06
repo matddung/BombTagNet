@@ -25,15 +25,32 @@ namespace BombTag
             }
         }
 
-        FString ResolveHostId(const UBombTagGameInstance* GameInstance)
+        FString ResolveDedicatedServerLabel(const UBombTagGameInstance* GameInstance)
         {
             if (!GameInstance)
             {
-                return FString(TEXT("UNKNOWN_HOST"));
+                return FString(TEXT("UNKNOWN_DEDICATED_SERVER"));
             }
 
-            const FString HostId = GameInstance->GetEffectiveHostPlayerId();
-            return HostId.IsEmpty() ? FString(TEXT("UNKNOWN_HOST")) : HostId;
+            FString DsId = GameInstance->GetPendingMatchDedicatedServerId();
+            if (DsId.IsEmpty())
+            {
+                DsId = GameInstance->GetDedicatedServerId();
+            }
+
+            if (!DsId.IsEmpty())
+            {
+                return DsId;
+            }
+
+            FString Address = GameInstance->GetPendingMatchServerAddress();
+            if (!Address.IsEmpty())
+            {
+                return Address;
+            }
+
+            FString LocalId = GameInstance->GetLocalPlayerId();
+            return LocalId.IsEmpty() ? FString(TEXT("UNKNOWN_DEDICATED_SERVER")) : LocalId;
         }
     }
 }

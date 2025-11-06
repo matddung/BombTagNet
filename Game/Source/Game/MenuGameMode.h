@@ -22,7 +22,6 @@ protected:
     virtual void PostLogin(APlayerController* NewPlayer) override;
 
     void SendClientsToMatch(const FString& TravelURL);
-    bool HasHostAuthority(const class ABombTagPlayerController* RequestingController) const;
     void VerifyStartTokenWithBackend(class ABombTagPlayerController* RequestingController, const FString& RoomId, const FString& StartToken);
     void HandleVerifyStartTokenResponse(TWeakObjectPtr<class ABombTagPlayerController> RequestingController, const FString& RoomId, const FString& StartToken, bool bOk, const FString& BodyOrError);
     FString ResolveMatchIdentifierForVerification(const class UBombTagGameInstance* GameInstance, const FString& RoomId) const;

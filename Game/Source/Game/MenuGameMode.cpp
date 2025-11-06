@@ -6,7 +6,6 @@
 
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -95,8 +94,8 @@ void AMenuGameMode::BeginPlay()
     Super::BeginPlay();
 
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
-    const FString OwnerId = BombTag::GameMode::ResolveHostId(Cast<UBombTagGameInstance>(GetGameInstance()));
-    UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s Owner=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *OwnerId);
+    const FString DedicatedServerLabel = BombTag::GameMode::ResolveDedicatedServerLabel(Cast<UBombTagGameInstance>(GetGameInstance()));
+    UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s DedicatedServer=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *DedicatedServerLabel);
 }
 
 void AMenuGameMode::PostLogin(APlayerController* NewPlayer)
@@ -131,13 +130,6 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start request missing room id."));
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 4"));
-        return;
-    }
-
-    if (!HasHostAuthority(RequestingController))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Controller %s lacks host permissions for match start."), *GetNameSafe(RequestingController));
-        RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 5"));
         return;
     }
 
@@ -414,7 +406,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
 
     if (ExpectedHost.IsEmpty() || ExpectedPort <= 0 || TravelURL.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (host=%s port=%d url=%s)."), *ExpectedHost, ExpectedPort, *TravelURL);
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (address=%s port=%d url=%s)."), *ExpectedHost, ExpectedPort, *TravelURL);
         Reject(TEXT("MATCH_START_DENIED 7"));
         return;
     }
@@ -434,7 +426,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     }
 
     const FString EndpointLabel = BuildEndpointLabel(ExpectedHost, ExpectedPort);
-    UE_LOG(LogTemp, Log, TEXT("[Match] Host %s approved match start for room %s. Directing clients to %s."), *GetNameSafe(Controller), *RoomId, *EndpointLabel);
+    UE_LOG(LogTemp, Log, TEXT("[Match] Match start approved for room %s. Directing clients to %s."), *GetNameSafe(Controller), *RoomId, *EndpointLabel);
 
     SendClientsToMatch(TravelURL);
 }
@@ -459,34 +451,4 @@ FString AMenuGameMode::ResolveMatchIdentifierForVerification(const UBombTagGameI
     }
 
     return RoomId;
-}
-
-bool AMenuGameMode::HasHostAuthority(const ABombTagPlayerController* RequestingController) const
-{
-    if (!RequestingController)
-    {
-        return false;
-    }
-
-    if (RequestingController->IsLocalController())
-    {
-        return true;
-    }
-
-    if (const UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
-    {
-        const FString HostPlayerId = GameInstance->GetPendingMatchHostPlayerId();
-        if (!HostPlayerId.IsEmpty())
-        {
-            if (const APlayerState* PlayerState = RequestingController->PlayerState)
-            {
-                if (PlayerState->GetPlayerName().Equals(HostPlayerId, ESearchCase::IgnoreCase))
-                {
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
 }

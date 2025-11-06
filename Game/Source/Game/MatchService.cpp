@@ -186,7 +186,6 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
         }
     }
 
-    JsonObject->TryGetStringField(TEXT("hostPlayerId"), OutStatus.HostPlayerId);
     JsonObject->TryGetStringField(TEXT("dedicatedServerAddress"), OutStatus.DedicatedServerAddress);
 
     double DedicatedPortValue = 0.0;

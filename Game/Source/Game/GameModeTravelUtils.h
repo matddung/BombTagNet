@@ -10,6 +10,6 @@ namespace BombTag
     {
         void ExtractTravelTargets(const FString& URL, FString& OutMap, FString& OutGameMode);
 
-        FString ResolveHostId(const UBombTagGameInstance* GameInstance);
+        FString ResolveDedicatedServerLabel(const UBombTagGameInstance* GameInstance);
     }
 }

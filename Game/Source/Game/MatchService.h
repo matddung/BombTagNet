@@ -46,9 +46,6 @@ struct GAME_API FMatchQueueStatus
     TArray<FRoomPlayer> Players;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
-    FString HostPlayerId;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     FString DedicatedServerAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")

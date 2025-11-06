@@ -117,7 +117,6 @@ public:
 public:
     FString GetCurrentRoomId() const { return CurrentRoomId; }
     FString GetPendingMatchStartToken() const { return PendingMatchStartToken; }
-    FString GetPendingMatchHostPlayerId() const { return PendingMatchHostPlayerId; }
     FString GetPendingMatchServerAddress() const { return PendingMatchServerAddress; }
     int32 GetPendingMatchServerPort() const { return PendingMatchServerPort; }
     FString GetPendingMatchDedicatedServerId() const { return PendingMatchDedicatedServerId; }
@@ -125,7 +124,6 @@ public:
     FString GetLocalPlayerId() const { return PlayerId; }
     FString GetPendingMatchRoomId() const { return PendingMatchRoomId; }
     FString GetPendingMatchTravelURL() const;
-    FString GetEffectiveHostPlayerId() const;
     FString GetDedicatedServerId() const { return DedicatedServerId; }
     FString GetDedicatedServerPublicAddress() const { return DedicatedServerPublicAddress; }
     FString GetDedicatedServerInternalAddress() const { return DedicatedServerInternalAddress; }
@@ -145,7 +143,7 @@ private:
     void StartMatchQueuePolling();
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
-    void PrepareMatchLaunch(const FString& HostPlayer, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt);
+    void PrepareMatchLaunch(const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt);
     void BroadcastPlayerRecord();
     void HandleBackendTraffic(const FString& Message);
 
@@ -173,7 +171,6 @@ private:
     FMatchQueueStatus CachedMatchQueueStatus;
     FTimerHandle MatchQueuePollTimerHandle;
 
-    FString PendingMatchHostPlayerId;
     FString PendingMatchServerAddress;
     int32 PendingMatchServerPort = 0;
     FString PendingMatchStartToken;
