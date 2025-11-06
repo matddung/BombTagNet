@@ -33,16 +33,16 @@ struct GAME_API FRoomSummary
     FString HostId;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
-    FString HostAddress;
+    FString DedicatedServerAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
-    FString HostInternalAddress;
+    FString DedicatedServerInternalAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
-    int32 HostPort = 0;
+    int32 DedicatedServerPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
-    int32 QueryPort = 0;
+    int32 DedicatedServerQueryPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
     FString DedicatedServerId;
@@ -93,22 +93,16 @@ struct GAME_API FMatchStartInfo
     FString HostPlayerId;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
-    FString HostAddress;
+    FString DedicatedServerAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
-    FString HostInternalAddress;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Match")
-    int32 HostPort = 0;
+    int32 DedicatedServerPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString StartToken;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString DedicatedServerId;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Match")
-    int32 QueryPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Match")
     FString StartTokenExpiresAt;

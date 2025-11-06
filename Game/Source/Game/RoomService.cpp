@@ -312,22 +312,14 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
 
             FMatchStartInfo Info;
             Info.MatchId = MatchId;
-            RootObject->TryGetStringField(TEXT("hostPlayerId"), Info.HostPlayerId);
-            RootObject->TryGetStringField(TEXT("hostAddress"), Info.HostAddress);
-            RootObject->TryGetStringField(TEXT("hostInternalAddress"), Info.HostInternalAddress);
 
-            double HostPortValue = 0.0;
-            if (RootObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))
+            double DedicatedPortValue = 0.0;
+            if (RootObject->TryGetNumberField(TEXT("dedicatedServerPort"), DedicatedPortValue))
             {
-                Info.HostPort = static_cast<int32>(HostPortValue);
+                Info.DedicatedServerPort = static_cast<int32>(DedicatedPortValue);
             }
 
-            double QueryPortValue = 0.0;
-            if (RootObject->TryGetNumberField(TEXT("queryPort"), QueryPortValue))
-            {
-                Info.QueryPort = static_cast<int32>(QueryPortValue);
-            }
-
+            RootObject->TryGetStringField(TEXT("dedicatedServerAddress"), Info.DedicatedServerAddress);
             RootObject->TryGetStringField(TEXT("dedicatedServerId"), Info.DedicatedServerId);
             RootObject->TryGetStringField(TEXT("startToken"), Info.StartToken);
             RootObject->TryGetStringField(TEXT("startTokenExpiresAt"), Info.StartTokenExpiresAt);
@@ -364,19 +356,19 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
     OutSummary.MaxPlayers = static_cast<int32>(MaxPlayersValue);
 
     JsonObject->TryGetStringField(TEXT("hostId"), OutSummary.HostId);
-    JsonObject->TryGetStringField(TEXT("hostAddress"), OutSummary.HostAddress);
-    JsonObject->TryGetStringField(TEXT("hostInternalAddress"), OutSummary.HostInternalAddress);
+    JsonObject->TryGetStringField(TEXT("dedicatedServerAddress"), OutSummary.DedicatedServerAddress);
+    JsonObject->TryGetStringField(TEXT("dedicatedServerInternalAddress"), OutSummary.DedicatedServerInternalAddress);
 
-    double HostPortValue = 0.0;
-    if (JsonObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))
+    double DedicatedPortValue = 0.0;
+    if (JsonObject->TryGetNumberField(TEXT("dedicatedServerPort"), DedicatedPortValue))
     {
-        OutSummary.HostPort = static_cast<int32>(HostPortValue);
+        OutSummary.DedicatedServerPort = static_cast<int32>(DedicatedPortValue);
     }
 
-    double QueryPortValue = 0.0;
-    if (JsonObject->TryGetNumberField(TEXT("queryPort"), QueryPortValue))
+    double DedicatedQueryPortValue = 0.0;
+    if (JsonObject->TryGetNumberField(TEXT("dedicatedServerQueryPort"), DedicatedQueryPortValue))
     {
-        OutSummary.QueryPort = static_cast<int32>(QueryPortValue);
+        OutSummary.DedicatedServerQueryPort = static_cast<int32>(DedicatedQueryPortValue);
     }
 
     JsonObject->TryGetStringField(TEXT("dedicatedServerId"), OutSummary.DedicatedServerId);

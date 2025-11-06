@@ -25,23 +25,15 @@ public class RoomService {
         this.tokens = tokens;
     }
 
-    public Room create(String hostId, String name, int maxPlayers, String password, String hostAddress) {
+    public Room create(String hostId, String name, int maxPlayers, String password) {
         String roomId = normalizeRoomKey(name);
         String canonicalKey = toCanonicalKey(roomId);
         Room r = new Room(roomId, hostId, roomId, Math.max(2, Math.min(4, maxPlayers)), password);
-        r.updateHostEndpoint(hostAddress, null, null, null);
         Room existing = rooms.putIfAbsent(canonicalKey, r);
         if (existing != null) {
             throw new IllegalStateException("ROOM_ALREADY_EXISTS");
         }
         return r;
-    }
-
-    public void updateHostEndpoint(Room room, String address, Integer port) {
-        if (room == null) {
-            return;
-        }
-        room.updateHostEndpoint(address, port, null, null);
     }
 
     private String normalizeRoomKey(String name) {
@@ -109,12 +101,18 @@ public class RoomService {
             r.clearPlayers();
             rooms.remove(toCanonicalKey(r.roomId()), r);
             r.setStatus(RoomStatus.WAITING);
+            r.clearDedicatedServerEndpoint();
+            r.setDedicatedServerId(null);
+            r.setStartToken(null, null);
             return;
         }
 
         if (r.size() == 0) {
             rooms.remove(toCanonicalKey(r.roomId()), r);
             r.setStatus(RoomStatus.WAITING);
+            r.clearDedicatedServerEndpoint();
+            r.setDedicatedServerId(null);
+            r.setStartToken(null, null);
             return;
         }
 
@@ -132,15 +130,15 @@ public class RoomService {
         String matchId = "m_" + seq.getAndIncrement();
         MatchTokenService.IssuedToken token = tokens.issueToken(server.dsId(), r.roomId(), matchId);
 
-        r.updateHostEndpoint(server.publicAddress(), server.gamePort(), server.internalAddress(), server.queryPort());
+        r.updateDedicatedServerEndpoint(server.publicAddress(), server.gamePort(), server.internalAddress(), server.queryPort());
         r.setDedicatedServerId(server.dsId());
         r.setStatus(RoomStatus.STARTED);
         r.setStartToken(token.token(), token.payload().expiresAt());
 
-        return new MatchLaunch(matchId, r.hostId(), server, token.token(), token.payload().expiresAt());
+        return new MatchLaunch(matchId, server, token.token(), token.payload().expiresAt());
     }
 
-    public record MatchLaunch(String matchId, String hostPlayerId, DedicatedServerRecord server,
+    public record MatchLaunch(String matchId, DedicatedServerRecord server,
                               String startToken, java.time.Instant expiresAt) {
     }
 }

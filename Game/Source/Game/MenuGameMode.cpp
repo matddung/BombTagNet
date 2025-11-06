@@ -408,8 +408,8 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
         }
     }
 
-    FString ExpectedHost = GameInstance->GetPendingMatchHostAddress();
-    int32 ExpectedPort = GameInstance->GetPendingMatchHostPort();
+    FString ExpectedHost = GameInstance->GetPendingMatchServerAddress();
+    int32 ExpectedPort = GameInstance->GetPendingMatchServerPort();
     FString TravelURL = GameInstance->GetPendingMatchTravelURL();
 
     if (ExpectedHost.IsEmpty() || ExpectedPort <= 0 || TravelURL.IsEmpty())

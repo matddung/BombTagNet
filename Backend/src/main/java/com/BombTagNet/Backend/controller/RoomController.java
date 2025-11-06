@@ -30,7 +30,7 @@ public class RoomController {
     @PostMapping
     public ResponseEntity<RoomSummary> create(HttpServletRequest request, @RequestBody CreateRoomReq req) {
         String playerId = PlayerRequestUtils.requirePlayerId(request);
-        Room room = rooms.create(playerId, req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password(), RequestIpUtils.resolveRemoteAddress(request));
+        Room room = rooms.create(playerId, req.name(), req.maxPlayers() == null ? 4 : req.maxPlayers(), req.password());
         Player host = new Player(playerId, PlayerRequestUtils.resolveNickname(request));
         room.add(host);
         return ResponseEntity.ok(toSummary(room));
@@ -66,26 +66,18 @@ public class RoomController {
         MatchLaunch launch = rooms.start(room, PlayerRequestUtils.requirePlayerId(request), MIN_PLAYERS);
         StartRoomRes response = new StartRoomRes(
                 launch.matchId(),
-                launch.hostPlayerId(),
                 launch.server().publicAddress(),
                 launch.server().gamePort() <= 0 ? null : launch.server().gamePort(),
-                launch.server().internalAddress(),
-                launch.server().queryPort(),
-                launch.server().dsId(),
                 launch.startToken(),
                 launch.expiresAt() == null ? null : launch.expiresAt().toString()
         );
 
-        log.info("Issuing StartRoomRes roomId={} matchId={} hostPlayerId={} hostAddress={} hostPort={} hostInternalAddress={} " +
-                        "queryPort={} dedicatedServerId={} startToken={} startTokenExpiresAt={}",
+        log.info("Issuing StartRoomRes roomId={} matchId={} dedicatedServerAddress={} dedicatedServerPort={} startToken={} " +
+                        "startTokenExpiresAt={}",
                 room.roomId(),
                 response.matchId(),
-                response.hostPlayerId(),
-                response.hostAddress(),
-                response.hostPort(),
-                response.hostInternalAddress(),
-                response.queryPort(),
-                response.dedicatedServerId(),
+                response.dedicatedServerAddress(),
+                response.dedicatedServerPort(),
                 response.startToken(),
                 response.startTokenExpiresAt());
 
@@ -103,16 +95,16 @@ public class RoomController {
     private RoomSummary toSummary(Room room) {
         List<Player> players = snapshotPlayers(room);
         return new RoomSummary(room.roomId(), room.name(), room.hostId(), room.status(), MIN_PLAYERS, room.maxPlayers(),
-                room.size(), players, room.hostAddress(), room.hostPort(), room.hostInternalAddress(), room.queryPort(),
-                room.dedicatedServerId(), room.startToken(),
+                room.size(), players, room.dedicatedServerId(), room.dedicatedServerAddress(), room.dedicatedServerPort(),
+                room.dedicatedServerInternalAddress(), room.dedicatedServerQueryPort(), room.startToken(),
                 room.startTokenExpiresAt() == null ? null : room.startTokenExpiresAt().toString());
     }
 
     private RoomDetail toDetail(Room room) {
         List<Player> players = snapshotPlayers(room);
         return new RoomDetail(room.roomId(), room.name(), room.status(), MIN_PLAYERS, room.maxPlayers(), room.size(),
-                players, room.hostId(), room.hostAddress(), room.hostPort(), room.hostInternalAddress(), room.queryPort(),
-                room.dedicatedServerId(), room.startToken(),
+                players, room.hostId(), room.dedicatedServerId(), room.dedicatedServerAddress(), room.dedicatedServerPort(),
+                room.dedicatedServerInternalAddress(), room.dedicatedServerQueryPort(), room.startToken(),
                 room.startTokenExpiresAt() == null ? null : room.startTokenExpiresAt().toString());
     }
 }

@@ -49,22 +49,16 @@ struct GAME_API FMatchQueueStatus
     FString HostPlayerId;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
-    FString HostAddress;
+    FString DedicatedServerAddress;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
-    FString HostInternalAddress;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
-    int32 HostPort = 0;
+    int32 DedicatedServerPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     FString StartToken;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     FString DedicatedServerId;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
-    int32 QueryPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Matchmaking")
     FString StartTokenExpiresAt;

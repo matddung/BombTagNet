@@ -13,10 +13,10 @@ public class Room {
     private final int maxPlayers;
     private final String password;
     private volatile RoomStatus status = RoomStatus.WAITING;
-    private volatile String hostAddress;
-    private volatile int hostPort = 0;
-    private volatile String hostInternalAddress;
-    private volatile Integer queryPort;
+    private volatile String dedicatedServerAddress;
+    private volatile int dedicatedServerPort = 0;
+    private volatile String dedicatedServerInternalAddress;
+    private volatile Integer dedicatedServerQueryPort;
     private volatile String dedicatedServerId;
     private volatile String startToken;
     private volatile java.time.Instant startTokenExpiresAt;
@@ -39,35 +39,42 @@ public class Room {
         return hostId;
     }
 
-    public String hostAddress() {
-        return hostAddress;
+    public String dedicatedServerAddress() {
+        return dedicatedServerAddress;
     }
 
-    public int hostPort() {
-        return hostPort;
+    public int dedicatedServerPort() {
+        return dedicatedServerPort;
     }
 
-    public void updateHostEndpoint(String address, Integer port, String internalAddress, Integer queryPort) {
+    public void updateDedicatedServerEndpoint(String address, Integer port, String internalAddress, Integer queryPort) {
         if (address != null && !address.isBlank()) {
-            this.hostAddress = address.trim();
+            this.dedicatedServerAddress = address.trim();
         }
         if (port != null && port > 0) {
-            this.hostPort = port;
+            this.dedicatedServerPort = port;
         }
         if (internalAddress != null && !internalAddress.isBlank()) {
-            this.hostInternalAddress = internalAddress.trim();
+            this.dedicatedServerInternalAddress = internalAddress.trim();
         }
         if (queryPort != null && queryPort > 0) {
-            this.queryPort = queryPort;
+            this.dedicatedServerQueryPort = queryPort;
         }
     }
 
-    public String hostInternalAddress() {
-        return hostInternalAddress;
+    public void clearDedicatedServerEndpoint() {
+        this.dedicatedServerAddress = null;
+        this.dedicatedServerPort = 0;
+        this.dedicatedServerInternalAddress = null;
+        this.dedicatedServerQueryPort = null;
     }
 
-    public Integer queryPort() {
-        return queryPort;
+    public String dedicatedServerInternalAddress() {
+        return dedicatedServerInternalAddress;
+    }
+
+    public Integer dedicatedServerQueryPort() {
+        return dedicatedServerQueryPort;
     }
 
     public void setDedicatedServerId(String dedicatedServerId) {

@@ -118,10 +118,8 @@ public:
     FString GetCurrentRoomId() const { return CurrentRoomId; }
     FString GetPendingMatchStartToken() const { return PendingMatchStartToken; }
     FString GetPendingMatchHostPlayerId() const { return PendingMatchHostPlayerId; }
-    FString GetPendingMatchHostAddress() const { return PendingMatchHostAddress; }
-    FString GetPendingMatchHostInternalAddress() const { return PendingMatchHostInternalAddress; }
-    int32 GetPendingMatchHostPort() const { return PendingMatchHostPort; }
-    int32 GetPendingMatchQueryPort() const { return PendingMatchQueryPort; }
+    FString GetPendingMatchServerAddress() const { return PendingMatchServerAddress; }
+    int32 GetPendingMatchServerPort() const { return PendingMatchServerPort; }
     FString GetPendingMatchDedicatedServerId() const { return PendingMatchDedicatedServerId; }
     FString GetPendingMatchStartTokenExpiresAt() const { return PendingMatchStartTokenExpiresAt; }
     FString GetLocalPlayerId() const { return PlayerId; }
@@ -147,8 +145,7 @@ private:
     void StartMatchQueuePolling();
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
-    void PrepareMatchLaunch(const FString& HostPlayer, const FString& HostAddress, const FString& HostInternalAddress, int32 HostPort, const FString& StartToken, const FString& DSId, int32 QueryPort, const FString& StartTokenExpiresAt);
-    FString ChooseMatchHostAddress(const FString& HostPlayer, const FString& HostPublicAddress, const FString& HostInternalAddress) const;
+    void PrepareMatchLaunch(const FString& HostPlayer, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt);
     void BroadcastPlayerRecord();
     void HandleBackendTraffic(const FString& Message);
 
@@ -177,15 +174,12 @@ private:
     FTimerHandle MatchQueuePollTimerHandle;
 
     FString PendingMatchHostPlayerId;
-    FString PendingMatchHostAddress;
-    FString PendingMatchHostInternalAddress;
-    int32 PendingMatchHostPort = 0;
+    FString PendingMatchServerAddress;
+    int32 PendingMatchServerPort = 0;
     FString PendingMatchStartToken;
     FString PendingMatchDedicatedServerId;
-    int32 PendingMatchQueryPort = 0;
     FString PendingMatchStartTokenExpiresAt;
     FString PendingMatchRoomId;
-    bool bPreferInternalHostAddress = false;
 
     FString DedicatedServerId;
     FString DedicatedServerPublicAddress;

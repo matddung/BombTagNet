@@ -187,19 +187,12 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
     }
 
     JsonObject->TryGetStringField(TEXT("hostPlayerId"), OutStatus.HostPlayerId);
-    JsonObject->TryGetStringField(TEXT("hostAddress"), OutStatus.HostAddress);
-    JsonObject->TryGetStringField(TEXT("hostInternalAddress"), OutStatus.HostInternalAddress);
+    JsonObject->TryGetStringField(TEXT("dedicatedServerAddress"), OutStatus.DedicatedServerAddress);
 
-    double HostPortValue = 0.0;
-    if (JsonObject->TryGetNumberField(TEXT("hostPort"), HostPortValue))
+    double DedicatedPortValue = 0.0;
+    if (JsonObject->TryGetNumberField(TEXT("dedicatedServerPort"), DedicatedPortValue))
     {
-        OutStatus.HostPort = static_cast<int32>(HostPortValue);
-    }
-
-    double QueryPortValue = 0.0;
-    if (JsonObject->TryGetNumberField(TEXT("queryPort"), QueryPortValue))
-    {
-        OutStatus.QueryPort = static_cast<int32>(QueryPortValue);
+        OutStatus.DedicatedServerPort = static_cast<int32>(DedicatedPortValue);
     }
 
     JsonObject->TryGetStringField(TEXT("dedicatedServerId"), OutStatus.DedicatedServerId);
