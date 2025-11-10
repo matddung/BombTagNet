@@ -13,6 +13,9 @@
 #include "Misc/CString.h"
 #include "Misc/ConfigCacheIni.h"
 #include "UObject/WeakObjectPtrTemplates.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 namespace
 {
@@ -218,7 +221,6 @@ void UBombTagGameInstance::Init()
     GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("PublicAddress"), DedicatedServerPublicAddress, GGameIni);
     GConfig->GetString(TEXT("Game.DedicatedServer"), TEXT("InternalAddress"), DedicatedServerInternalAddress, GGameIni);
     GConfig->GetInt(TEXT("Game.DedicatedServer"), TEXT("GamePort"), DedicatedServerGamePort, GGameIni);
-    GConfig->GetInt(TEXT("Game.DedicatedServer"), TEXT("QueryPort"), DedicatedServerQueryPort, GGameIni);
 
     auto ApplyEnvOverride = [](const TCHAR* EnvVar, FString& Target, bool bTrim)
         {
@@ -247,7 +249,6 @@ void UBombTagGameInstance::Init()
         };
 
     ApplyEnvPort(TEXT("BOMBTAG_DS_GAME_PORT"), DedicatedServerGamePort);
-    ApplyEnvPort(TEXT("BOMBTAG_DS_QUERY_PORT"), DedicatedServerQueryPort);
 
     DedicatedServerId.TrimStartAndEndInline();
     DedicatedServerPublicAddress.TrimStartAndEndInline();
@@ -310,6 +311,12 @@ void UBombTagGameInstance::Init()
             Api->ClearLocalPlayerIdentity();
         }
     }
+
+    if (bIsDedicatedServer)
+    {
+        NotifyBackendDedicatedServerReady();
+    }
+
     BroadcastPlayerRecord();
     UE_LOG(LogTemp, Log, TEXT("BombTag GameInstance initialized"));
 }
@@ -895,6 +902,71 @@ void UBombTagGameInstance::HandleBackendTraffic(const FString& Message)
     UE_LOG(LogTemp, Log, TEXT("[Backend][Traffic] %s"), *Message);
 #endif
     OnBackendTraffic.Broadcast(Message);
+}
+
+void UBombTagGameInstance::NotifyBackendDedicatedServerReady()
+{
+    if (!IsRunningDedicatedServer())
+    {
+        return;
+    }
+
+    if (!Api)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DedicatedServer] Backend API client not initialized; cannot send READY notification."));
+        return;
+    }
+
+    if (DedicatedServerId.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DedicatedServer] DedicatedServerId is empty; skipping READY notification."));
+        return;
+    }
+
+    TSharedPtr<FJsonObject> Payload = MakeShared<FJsonObject>();
+    Payload->SetStringField(TEXT("dsId"), DedicatedServerId);
+
+    if (!DedicatedServerPublicAddress.IsEmpty())
+    {
+        Payload->SetStringField(TEXT("publicAddress"), DedicatedServerPublicAddress);
+    }
+
+    if (!DedicatedServerInternalAddress.IsEmpty())
+    {
+        Payload->SetStringField(TEXT("internalAddress"), DedicatedServerInternalAddress);
+    }
+
+    if (DedicatedServerGamePort > 0)
+    {
+        Payload->SetNumberField(TEXT("gamePort"), DedicatedServerGamePort);
+    }
+
+    Payload->SetStringField(TEXT("status"), TEXT("READY"));
+
+    FString Content;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Content);
+    FJsonSerializer::Serialize(Payload.ToSharedRef(), Writer);
+
+    UE_LOG(LogTemp, Log, TEXT("[DedicatedServer] Notifying backend of READY state (dsId=%s public=%s:%d internal=%s)"),
+        *DedicatedServerId,
+        *DedicatedServerPublicAddress,
+        DedicatedServerGamePort,
+        *DedicatedServerInternalAddress);
+
+    Api->PostJson(TEXT("/ds/register"), Content, FOnApiResponse::CreateUObject(
+        this, &UBombTagGameInstance::OnNotifyDedicatedServerReadyResponse));
+}
+
+void UBombTagGameInstance::OnNotifyDedicatedServerReadyResponse(bool bSuccess, const FString& BodyOrError)
+{
+    if (bSuccess)
+    {
+        UE_LOG(LogTemp, Log, TEXT("[DedicatedServer] Backend acknowledged READY registration."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DedicatedServer] Failed to notify backend about READY state: %s"), *BodyOrError);
+    }
 }
 
 void UBombTagGameInstance::EnsureNicknameIsValid()

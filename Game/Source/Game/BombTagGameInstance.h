@@ -128,7 +128,6 @@ public:
     FString GetDedicatedServerPublicAddress() const { return DedicatedServerPublicAddress; }
     FString GetDedicatedServerInternalAddress() const { return DedicatedServerInternalAddress; }
     int32 GetDedicatedServerGamePort() const { return DedicatedServerGamePort; }
-    int32 GetDedicatedServerQueryPort() const { return DedicatedServerQueryPort; }
     UApiClient* GetApiClient() const { return Api; }
 
 private:
@@ -146,6 +145,8 @@ private:
     void PrepareMatchLaunch(const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt);
     void BroadcastPlayerRecord();
     void HandleBackendTraffic(const FString& Message);
+    void NotifyBackendDedicatedServerReady();
+    void OnNotifyDedicatedServerReadyResponse(bool bSuccess, const FString& BodyOrError);
 
 private:
     UPROPERTY()
@@ -182,7 +183,6 @@ private:
     FString DedicatedServerPublicAddress;
     FString DedicatedServerInternalAddress;
     int32 DedicatedServerGamePort = 0;
-    int32 DedicatedServerQueryPort = 0;
 
     UPROPERTY(EditDefaultsOnly, Category = "Online|Sessions")
     FName MatchMapName = FName(TEXT("/Game/Maps/MainMap"));

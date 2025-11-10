@@ -16,7 +16,6 @@ public class Room {
     private volatile String dedicatedServerAddress;
     private volatile int dedicatedServerPort = 0;
     private volatile String dedicatedServerInternalAddress;
-    private volatile Integer dedicatedServerQueryPort;
     private volatile String dedicatedServerId;
     private volatile String startToken;
     private volatile java.time.Instant startTokenExpiresAt;
@@ -47,7 +46,7 @@ public class Room {
         return dedicatedServerPort;
     }
 
-    public void updateDedicatedServerEndpoint(String address, Integer port, String internalAddress, Integer queryPort) {
+    public void updateDedicatedServerEndpoint(String address, Integer port, String internalAddress) {
         if (address != null && !address.isBlank()) {
             this.dedicatedServerAddress = address.trim();
         }
@@ -57,24 +56,16 @@ public class Room {
         if (internalAddress != null && !internalAddress.isBlank()) {
             this.dedicatedServerInternalAddress = internalAddress.trim();
         }
-        if (queryPort != null && queryPort > 0) {
-            this.dedicatedServerQueryPort = queryPort;
-        }
     }
 
     public void clearDedicatedServerEndpoint() {
         this.dedicatedServerAddress = null;
         this.dedicatedServerPort = 0;
         this.dedicatedServerInternalAddress = null;
-        this.dedicatedServerQueryPort = null;
     }
 
     public String dedicatedServerInternalAddress() {
         return dedicatedServerInternalAddress;
-    }
-
-    public Integer dedicatedServerQueryPort() {
-        return dedicatedServerQueryPort;
     }
 
     public void setDedicatedServerId(String dedicatedServerId) {

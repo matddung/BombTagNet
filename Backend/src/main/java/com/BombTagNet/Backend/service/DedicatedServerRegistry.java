@@ -21,7 +21,6 @@ public class DedicatedServerRegistry {
             String publicAddress,
             String internalAddress,
             int gamePort,
-            Integer queryPort,
             DedicatedServerStatus status,
             Instant lastUpdated
     ) {
@@ -31,7 +30,7 @@ public class DedicatedServerRegistry {
     private final Object lock = new Object();
 
     public DedicatedServerRecord registerOrUpdate(String dsId, String publicAddress, String internalAddress,
-                                                  Integer gamePort, Integer queryPort, DedicatedServerStatus status) {
+                                                  Integer gamePort, DedicatedServerStatus status) {
         if (dsId == null || dsId.isBlank()) {
             throw new IllegalArgumentException("dsId required");
         }
@@ -44,14 +43,12 @@ public class DedicatedServerRegistry {
             String resolvedPublic = normalize(publicAddress, existing == null ? null : existing.publicAddress());
             String resolvedInternal = normalize(internalAddress, existing == null ? null : existing.internalAddress());
             int resolvedGamePort = normalizePort(gamePort, existing == null ? null : existing.gamePort());
-            Integer resolvedQueryPort = normalizeOptionalPort(queryPort, existing == null ? existing.queryPort() : existing.queryPort());
 
             DedicatedServerRecord updated = new DedicatedServerRecord(
                     dsId,
                     resolvedPublic,
                     resolvedInternal,
                     resolvedGamePort,
-                    resolvedQueryPort,
                     effectiveStatus,
                     Instant.now()
             );
@@ -78,7 +75,6 @@ public class DedicatedServerRegistry {
                                 record.publicAddress(),
                                 record.internalAddress(),
                                 record.gamePort(),
-                                record.queryPort(),
                                 DedicatedServerStatus.BUSY,
                                 Instant.now()
                         );
@@ -104,7 +100,6 @@ public class DedicatedServerRegistry {
                     existing.publicAddress(),
                     existing.internalAddress(),
                     existing.gamePort(),
-                    existing.queryPort(),
                     status,
                     Instant.now()
             );
@@ -131,15 +126,5 @@ public class DedicatedServerRegistry {
             return fallback;
         }
         return 0;
-    }
-
-    private Integer normalizeOptionalPort(Integer candidate, Integer fallback) {
-        if (candidate != null && candidate > 0) {
-            return candidate;
-        }
-        if (fallback != null && fallback > 0) {
-            return fallback;
-        }
-        return null;
     }
 }

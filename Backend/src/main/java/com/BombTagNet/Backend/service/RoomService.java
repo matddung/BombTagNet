@@ -130,7 +130,7 @@ public class RoomService {
         String matchId = "m_" + seq.getAndIncrement();
         MatchTokenService.IssuedToken token = tokens.issueToken(server.dsId(), r.roomId(), matchId);
 
-        r.updateDedicatedServerEndpoint(server.publicAddress(), server.gamePort(), server.internalAddress(), server.queryPort());
+        r.updateDedicatedServerEndpoint(server.publicAddress(), server.gamePort(), server.internalAddress());
         r.setDedicatedServerId(server.dsId());
         r.setStatus(RoomStatus.STARTED);
         r.setStartToken(token.token(), token.payload().expiresAt());

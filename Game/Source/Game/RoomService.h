@@ -42,9 +42,6 @@ struct GAME_API FRoomSummary
     int32 DedicatedServerPort = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")
-    int32 DedicatedServerQueryPort = 0;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Room")
     FString DedicatedServerId;
 
     UPROPERTY(BlueprintReadOnly, Category = "Room")

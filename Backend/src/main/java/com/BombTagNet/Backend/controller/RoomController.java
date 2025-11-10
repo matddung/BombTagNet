@@ -96,7 +96,7 @@ public class RoomController {
         List<Player> players = snapshotPlayers(room);
         return new RoomSummary(room.roomId(), room.name(), room.hostId(), room.status(), MIN_PLAYERS, room.maxPlayers(),
                 room.size(), players, room.dedicatedServerId(), room.dedicatedServerAddress(), room.dedicatedServerPort(),
-                room.dedicatedServerInternalAddress(), room.dedicatedServerQueryPort(), room.startToken(),
+                room.dedicatedServerInternalAddress(), room.startToken(),
                 room.startTokenExpiresAt() == null ? null : room.startTokenExpiresAt().toString());
     }
 
@@ -104,7 +104,7 @@ public class RoomController {
         List<Player> players = snapshotPlayers(room);
         return new RoomDetail(room.roomId(), room.name(), room.status(), MIN_PLAYERS, room.maxPlayers(), room.size(),
                 players, room.hostId(), room.dedicatedServerId(), room.dedicatedServerAddress(), room.dedicatedServerPort(),
-                room.dedicatedServerInternalAddress(), room.dedicatedServerQueryPort(), room.startToken(),
+                room.dedicatedServerInternalAddress(), room.startToken(),
                 room.startTokenExpiresAt() == null ? null : room.startTokenExpiresAt().toString());
     }
 }

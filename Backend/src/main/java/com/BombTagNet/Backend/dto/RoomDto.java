@@ -12,8 +12,7 @@ public class RoomDto {
     public record RoomSummary(String roomId, String name, String hostId, RoomStatus status, Integer minPlayers,
                               Integer maxPlayers, Integer currentPlayers, List<Player> players,
                               String dedicatedServerId, String dedicatedServerAddress, Integer dedicatedServerPort,
-                              String dedicatedServerInternalAddress, Integer dedicatedServerQueryPort,
-                              String startToken, String startTokenExpiresAt) {
+                              String dedicatedServerInternalAddress, String startToken, String startTokenExpiresAt) {
     }
 
     public record JoinRoomReq(String password) {
@@ -25,8 +24,7 @@ public class RoomDto {
     public record RoomDetail(String roomId, String name, RoomStatus status, Integer minPlayers, Integer maxPlayers,
                              Integer currentPlayers, List<Player> players, String hostId, String dedicatedServerId,
                              String dedicatedServerAddress, Integer dedicatedServerPort,
-                             String dedicatedServerInternalAddress, Integer dedicatedServerQueryPort, String startToken,
-                             String startTokenExpiresAt) {
+                             String dedicatedServerInternalAddress, String startToken, String startTokenExpiresAt) {
     }
 
     public record StartRoomRes(String matchId, String dedicatedServerAddress, Integer dedicatedServerPort,

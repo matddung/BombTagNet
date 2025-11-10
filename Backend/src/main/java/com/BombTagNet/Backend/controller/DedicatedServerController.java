@@ -29,7 +29,6 @@ public class DedicatedServerController {
                 req.publicAddress(),
                 req.internalAddress(),
                 req.gamePort(),
-                req.queryPort(),
                 status
         );
         return ResponseEntity.ok(toResponse(record));
@@ -96,7 +95,6 @@ public class DedicatedServerController {
                 record.publicAddress(),
                 record.internalAddress(),
                 record.gamePort(),
-                record.queryPort(),
                 record.status().name(),
                 record.lastUpdated()
         );
@@ -107,7 +105,6 @@ public class DedicatedServerController {
             String publicAddress,
             String internalAddress,
             Integer gamePort,
-            Integer queryPort,
             String status
     ) {
     }
@@ -120,7 +117,6 @@ public class DedicatedServerController {
             String publicAddress,
             String internalAddress,
             Integer gamePort,
-            Integer queryPort,
             String status,
             Instant lastUpdated
     ) {

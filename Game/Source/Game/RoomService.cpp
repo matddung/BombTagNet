@@ -365,12 +365,6 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
         OutSummary.DedicatedServerPort = static_cast<int32>(DedicatedPortValue);
     }
 
-    double DedicatedQueryPortValue = 0.0;
-    if (JsonObject->TryGetNumberField(TEXT("dedicatedServerQueryPort"), DedicatedQueryPortValue))
-    {
-        OutSummary.DedicatedServerQueryPort = static_cast<int32>(DedicatedQueryPortValue);
-    }
-
     JsonObject->TryGetStringField(TEXT("dedicatedServerId"), OutSummary.DedicatedServerId);
     JsonObject->TryGetStringField(TEXT("startToken"), OutSummary.StartToken);
     JsonObject->TryGetStringField(TEXT("startTokenExpiresAt"), OutSummary.StartTokenExpiresAt);
