@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "RoomService.h"
 #include "MatchService.h"
+#include "BackendTrafficTypes.h"
 #include "MainMenuWidget.generated.h"
 
 class UButton;
@@ -187,6 +188,10 @@ protected:
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UTextBlock> NewNicknameMenuErrorText;
 
+public:
+    UFUNCTION()
+    void HandleBackendTrafficMessage(const FTrafficMsg& Message);
+
 private:
     UFUNCTION()
     void OpenMatchMenu();
@@ -281,8 +286,13 @@ private:
     UFUNCTION() 
     void HandleMatchQueueStatus(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
 
-    UFUNCTION()
-    void HandleBackendTrafficMessage(const FString& Message);
+    bool ShouldDisplayHostOnlyMessage(const FTrafficMsg& Message) const;
+    bool IsLocalWaitingRoomHost() const;
+    void RefreshWaitingRoomTrafficDisplay();
+    void OnTrafficMessageExpired(FString ExpiredKey);
+    FSlateColor GetColorForSeverity(ETrafficSeverity Severity) const;
+    FString GetSeverityLabel(ETrafficSeverity Severity) const;
+    void ClearTrafficMessageTimers();
 
     FTimerHandle   MatchDotsTimerHandle;
     int32          MatchDotCount = 1;
@@ -290,7 +300,17 @@ private:
     bool           bAnimateMatchMenuDots = true;
     FTimerHandle   WaitingRoomRefreshTimerHandle;
     bool           bWaitingRoomHasErrorMessage = false;
+    struct FWaitingRoomMessageEntry
+    {
+        FTrafficMsg Message;
+        FTimerHandle TimerHandle;
+        FString ResolvedKey;
+        double CreatedAt = 0.0;
+    };
+
+    TArray<FWaitingRoomMessageEntry> WaitingRoomMessages;
     FString        WaitingRoomLastTrafficMessage;
+    int32          WaitingRoomTrafficSequence = 0;
 
     enum class ERoomRequestType : uint8
     {

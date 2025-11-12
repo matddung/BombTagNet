@@ -5,6 +5,8 @@
 #include "ResultEntryWidget.h"
 #include "BombTagGameMode.h"
 #include "MenuGameMode.h"
+#include "MainMenuWidget.h"
+#include "BackendTrafficTypes.h"
 
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
@@ -244,12 +246,29 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
         return;
     }
 
+    FString ResolvedAddr = DedicatedServerAddress;
+    int32  ResolvedPort = DedicatedServerPort;
+    FString ResolvedTravelURL = TravelURL;
+
+    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
+    {
+        const FString& GIAddr = GameInstance->GetPendingMatchServerAddress();
+        const int32    GIPort = GameInstance->GetPendingMatchServerPort();
+        const FString& GIURL = GameInstance->GetPendingMatchTravelURL();
+
+        if (!GIAddr.IsEmpty()) { ResolvedAddr = GIAddr; }
+        if (GIPort > 0) { ResolvedPort = GIPort; }
+        if (!GIURL.IsEmpty()) { ResolvedTravelURL = GIURL; }
+    }
+
     if (RoomId.IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch received without a room id."));
         ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 1"));
         return;
     }
+
+    ClientDebugMatchStartSnapshot(RoomId, StartToken, ResolvedAddr, ResolvedPort, ResolvedTravelURL);
 
     if (AMenuGameMode* MenuGameMode = GetWorld()->GetAuthGameMode<AMenuGameMode>())
     {
@@ -272,6 +291,63 @@ void ABombTagPlayerController::ClientNotifyMatchStartDenied_Implementation(const
     {
         GameInstance->OnRoomStarted.Broadcast(false, CodeToReport);
     }
+#endif
+}
+
+void ABombTagPlayerController::ClientDebugMatchStartSnapshot_Implementation(const FString& RoomId, const FString& StartToken,
+    const FString& DsAddr, int32 DsPort, const FString& TravelURL)
+{
+#if !UE_SERVER
+    if (UMainMenuWidget* Widget = ResolveWaitingRoomWidget())
+    {
+        (void)StartToken;
+        FTrafficMsg Msg;
+        Msg.Severity = ETrafficSeverity::Info;
+        Msg.bHostOnly = true;
+        Msg.TTLSeconds = 6.f;
+        Msg.Key = TEXT("rpc.snapshot");
+        Msg.Text = FText::FromString(FString::Printf(
+            TEXT("[RPC] room=%s addr=%s port=%d url=%s"),
+            *FTrafficMsgFactory::MaskStr(RoomId),
+            *FTrafficMsgFactory::MaskStr(DsAddr),
+            DsPort,
+            *FTrafficMsgFactory::MaskStr(TravelURL)));
+        Widget->HandleBackendTrafficMessage(Msg);
+    }
+#else
+    (void)RoomId;
+    (void)StartToken;
+    (void)DsAddr;
+    (void)DsPort;
+    (void)TravelURL;
+#endif
+}
+
+void ABombTagPlayerController::ClientDebugVerifyStartResult_Implementation(const FString& ResultSummary, bool bOk,
+    const FString& RoomId, const FString& MatchId, const FString& DsId)
+{
+#if !UE_SERVER
+    if (UMainMenuWidget* Widget = ResolveWaitingRoomWidget())
+    {
+        FTrafficMsg Msg;
+        Msg.Severity = bOk ? ETrafficSeverity::Success : ETrafficSeverity::Warn;
+        Msg.bHostOnly = true;
+        Msg.TTLSeconds = bOk ? 4.f : 8.f;
+        Msg.Key = TEXT("verify.result");
+        Msg.Text = FText::FromString(FString::Printf(
+            TEXT("%s room=%s match=%s ds=%s"),
+            *ResultSummary,
+            *FTrafficMsgFactory::MaskStr(RoomId),
+            *FTrafficMsgFactory::MaskStr(MatchId),
+            *FTrafficMsgFactory::MaskStr(DsId)));
+        Widget->HandleBackendTrafficMessage(Msg);
+    }
+#else
+    (void)ResultSummary;
+    (void)bOk;
+    (void)RoomId;
+    (void)MatchId;
+    (void)DsId;
 #endif
 }
 
@@ -320,6 +396,18 @@ bool ABombTagPlayerController::ValidateMatchSnapshot(const FBombTagMatchResultSn
     return false;
 #endif
 }
+
+#if !UE_SERVER
+UMainMenuWidget* ABombTagPlayerController::ResolveWaitingRoomWidget() const
+{
+    if (MenuWidget)
+    {
+        return Cast<UMainMenuWidget>(MenuWidget);
+    }
+
+    return nullptr;
+}
+#endif
 
 void ABombTagPlayerController::ClientShowMainMenu_Implementation(TSubclassOf<UUserWidget> InMenuClass)
 {

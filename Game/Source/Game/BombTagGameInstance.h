@@ -5,6 +5,7 @@
 #include "TimerManager.h"
 #include "RoomService.h"
 #include "MatchService.h"
+#include "BackendTrafficTypes.h"
 #include "BombTagGameInstance.generated.h"
 
 class UBombTagSaveGame;
@@ -26,7 +27,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRoomStarted, bool, bSuccess, con
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoomClosed, const FString&, Reason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchQueueStatus, bool, bSuccess, const FMatchQueueStatus&, Status, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnPlayerRecordUpdated, int32, Win, int32, Lose, int32, TotalMatches);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBackendTraffic, const FString&, Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBackendTraffic, const FTrafficMsg&, Message);
 
 UCLASS()
 class GAME_API UBombTagGameInstance : public UGameInstance
@@ -144,7 +145,7 @@ private:
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
     void PrepareMatchLaunch(const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt);
     void BroadcastPlayerRecord();
-    void HandleBackendTraffic(const FString& Message);
+    void HandleBackendTraffic(const FTrafficMsg& Message);
     void NotifyBackendDedicatedServerReady();
     void OnNotifyDedicatedServerReadyResponse(bool bSuccess, const FString& BodyOrError);
 

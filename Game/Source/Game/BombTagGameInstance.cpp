@@ -268,7 +268,9 @@ void UBombTagGameInstance::Init()
             {
                 if (WeakThis.IsValid())
                 {
-                    WeakThis->HandleBackendTraffic(Message);
+                    FTrafficMsg Msg;
+                    Msg.Text = FText::FromString(Message);
+                    WeakThis->HandleBackendTraffic(Msg);
                 }
             });
     }
@@ -837,6 +839,7 @@ void UBombTagGameInstance::RequestServerMatchStart()
         {
             if (ABombTagPlayerController* BTPC = Cast<ABombTagPlayerController>(PC))
             {
+                OnBackendTraffic.Broadcast(FTrafficMsgFactory::MakeStartRequestInfo(RoomIdentifier, PendingMatchServerAddress, PendingMatchServerPort, TravelURL));
                 const FString DsLabel = !PendingMatchDedicatedServerId.IsEmpty() ? PendingMatchDedicatedServerId : TEXT("<unknown-ds>");
                 UE_LOG(LogTemp, Log, TEXT("[Match] Requesting dedicated match start via RPC (room=%s dedicatedServerId=%s address=%s port=%d url=%s)."), *RoomIdentifier, *DsLabel, *PendingMatchServerAddress, PendingMatchServerPort, *TravelURL);
                 BTPC->ServerRequestStartMatch(RoomIdentifier, PendingMatchStartToken, PendingMatchServerAddress, PendingMatchServerPort, TravelURL);
@@ -844,7 +847,6 @@ void UBombTagGameInstance::RequestServerMatchStart()
             else
             {
                 UE_LOG(LogTemp, Error, TEXT("[Match][Error] First player controller is not ABombTagPlayerController; aborting travel to %s."), *TravelURL);
-                PC->ClientTravel(TravelURL, ETravelType::TRAVEL_Absolute);
             }
         }
         else
@@ -895,10 +897,10 @@ void UBombTagGameInstance::BroadcastPlayerRecord()
     OnPlayerRecordUpdated.Broadcast(WinCount, LoseCount, WinCount + LoseCount);
 }
 
-void UBombTagGameInstance::HandleBackendTraffic(const FString& Message)
+void UBombTagGameInstance::HandleBackendTraffic(const FTrafficMsg& Message)
 {
 #if !UE_BUILD_SHIPPING
-    UE_LOG(LogTemp, Log, TEXT("[Backend][Traffic] %s"), *Message);
+    UE_LOG(LogTemp, Log, TEXT("[Backend][Traffic] %s"), *Message.Text.ToString());
 #endif
     OnBackendTraffic.Broadcast(Message);
 }

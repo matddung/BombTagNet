@@ -11,6 +11,7 @@ class UTextBlock;
 class UBorder;
 class UResultEntryWidget;
 class UBombTagGameInstance;
+class UMainMenuWidget;
 
 UCLASS()
 class GAME_API ABombTagPlayerController : public APlayerController
@@ -43,6 +44,14 @@ public:
 
     UFUNCTION(Client, Reliable)
     void ClientNotifyMatchStartDenied(const FString& ErrorCode);
+
+    UFUNCTION(Client, Reliable)
+    void ClientDebugMatchStartSnapshot(const FString& RoomId, const FString& StartToken,
+        const FString& DsAddr, int32 DsPort, const FString& TravelURL);
+
+    UFUNCTION(Client, Reliable)
+    void ClientDebugVerifyStartResult(const FString& ResultSummary, bool bOk,
+        const FString& RoomId, const FString& MatchId, const FString& DsId);
 	
 protected:
     virtual void BeginPlay() override;
@@ -93,4 +102,8 @@ protected:
 
 private:
     bool ValidateMatchSnapshot(const FBombTagMatchResultSnapshot& Snapshot) const;
+
+#if !UE_SERVER
+    UMainMenuWidget* ResolveWaitingRoomWidget() const;
+#endif
 };

@@ -183,6 +183,7 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
     if (!GameInstance)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: game instance unavailable."));
+        RequestingController->ClientDebugVerifyStartResult(TEXT("verifyStart precheck gameInstanceMissing"), false, FString(), FString(), FString());
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 8"));
         return;
     }
@@ -191,6 +192,7 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
     if (!ApiClient)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: API client unavailable."));
+        RequestingController->ClientDebugVerifyStartResult(TEXT("verifyStart precheck apiMissing"), false, FString(), FString(), FString());
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 9"));
         return;
     }
@@ -220,6 +222,7 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
     if (!RequiredRoomId.IsEmpty() && !RoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: room mismatch (expected=%s provided=%s)."), *RequiredRoomId, *RoomId);
+        RequestingController->ClientDebugVerifyStartResult(TEXT("verifyStart precheck roomMismatch"), false, RoomId, FString(), FString());
         RequestingController->ClientNotifyMatchStartDenied(TEXT("ROOM_MISMATCH"));
         return;
     }
@@ -227,6 +230,7 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
     if (!ExpectedToken.IsEmpty() && !StartToken.Equals(ExpectedToken, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: token mismatch."));
+        RequestingController->ClientDebugVerifyStartResult(TEXT("verifyStart precheck tokenMismatch"), false, RoomId, FString(), FString());
         RequestingController->ClientNotifyMatchStartDenied(TEXT("TOKEN_MISMATCH"));
         return;
     }
@@ -261,6 +265,7 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
     if (!FJsonSerializer::Serialize(Payload, Writer))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: failed to serialize verification payload."));
+        RequestingController->ClientDebugVerifyStartResult(TEXT("verifyStart precheck serializationFailed"), false, RoomId, FString(), FString());
         RequestingController->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 9"));
         return;
     }
@@ -287,6 +292,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance());
     if (!GameInstance)
     {
+        Controller->ClientDebugVerifyStartResult(TEXT("verifyStart gameInstanceMissing"), false, FString(), FString(), FString());
         Controller->ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 8"));
         return;
     }
@@ -300,6 +306,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (!bOk)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend verification HTTP error: %s"), *BodyOrError);
+        Controller->ClientDebugVerifyStartResult(TEXT("verifyStart httpOk=false"), false, FString(), FString(), FString());
         Reject(TEXT("MATCH_START_DENIED 6"));
         return;
     }
@@ -309,6 +316,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend verification returned invalid JSON."));
+        Controller->ClientDebugVerifyStartResult(TEXT("verifyStart jsonParseError"), false, FString(), FString(), FString());
         Reject(TEXT("MATCH_START_DENIED 9"));
         return;
     }
@@ -328,10 +336,13 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     FString ResponseExpiresAt;
     RootObject->TryGetStringField(TEXT("expiresAt"), ResponseExpiresAt);
 
+    const FString VerificationSummary = FString::Printf(TEXT("verifyStart ok=%s"), bResponseSuccess ? TEXT("true") : TEXT("false"));
+
     if (!bResponseSuccess)
     {
         const FString DeniedCode = ErrorCode.IsEmpty() ? FString(TEXT("MATCH_START_DENIED 9")) : ErrorCode;
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Backend rejected start token: %s"), *DeniedCode);
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(DeniedCode);
         return;
     }
@@ -354,6 +365,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (!RequiredRoomId.IsEmpty() && !RoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied after verify: room mismatch."));
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("ROOM_MISMATCH"));
         return;
     }
@@ -361,6 +373,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (!ExpectedToken.IsEmpty() && !StartToken.Equals(ExpectedToken, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied after verify: token changed."));
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("TOKEN_MISMATCH"));
         return;
     }
@@ -368,6 +381,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (!RequiredRoomId.IsEmpty() && !ResponseRoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token room mismatch: expected=%s response=%s"), *RequiredRoomId, *ResponseRoomId);
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("MATCH_START_DENIED 10"));
         return;
     }
@@ -375,6 +389,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (!ExpectedMatchId.IsEmpty() && !ResponseMatchId.Equals(ExpectedMatchId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token match mismatch: expected=%s response=%s"), *ExpectedMatchId, *ResponseMatchId);
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("MATCH_START_DENIED 11"));
         return;
     }
@@ -388,6 +403,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (!RequiredDedicatedServerId.IsEmpty() && !ResponseDedicatedServerId.Equals(RequiredDedicatedServerId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token DS mismatch: expected=%s response=%s"), *RequiredDedicatedServerId, *ResponseDedicatedServerId);
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("MATCH_START_DENIED 12"));
         return;
     }
@@ -400,6 +416,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
             if (ExpirationUtc <= FDateTime::UtcNow())
             {
                 UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token already expired at %s"), *ResponseExpiresAt);
+                Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
                 Reject(TEXT("MATCH_START_DENIED 14"));
                 return;
             }
@@ -447,6 +464,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (ProvidedHost.IsEmpty() || ProvidedPort <= 0 || ProvidedTravelURL.IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (address=%s port=%d url=%s)."), *ProvidedHost, ProvidedPort, *ProvidedTravelURL);
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("MATCH_START_DENIED 7"));
         return;
     }
@@ -461,12 +479,14 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     if (ConfiguredPort > 0 && LocalBoundPort > 0 && ConfiguredPort != LocalBoundPort)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Dedicated server port mismatch: expected %d actual %d"), ConfiguredPort, LocalBoundPort);
+        Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("MATCH_START_DENIED 15"));
         return;
     }
 
     const FString EndpointLabel = BuildEndpointLabel(ProvidedHost, ProvidedPort);
     UE_LOG(LogTemp, Log, TEXT("[Match] Match start approved for room %s. Directing clients to %s."), *GetNameSafe(Controller), *RoomId, *EndpointLabel);
+    Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
 
     SendClientsToMatch(ProvidedTravelURL);
 }
