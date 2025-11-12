@@ -122,7 +122,7 @@ public:
     FString GetPendingMatchDedicatedServerId() const { return PendingMatchDedicatedServerId; }
     FString GetPendingMatchStartTokenExpiresAt() const { return PendingMatchStartTokenExpiresAt; }
     FString GetLocalPlayerId() const { return PlayerId; }
-    FString GetPendingMatchRoomId() const { return PendingMatchRoomId; }
+    FString GetPendingMatchId() const { return PendingMatchId; }
     FString GetPendingMatchTravelURL() const;
     FString GetDedicatedServerId() const { return DedicatedServerId; }
     FString GetDedicatedServerPublicAddress() const { return DedicatedServerPublicAddress; }
@@ -177,7 +177,7 @@ private:
     FString PendingMatchStartToken;
     FString PendingMatchDedicatedServerId;
     FString PendingMatchStartTokenExpiresAt;
-    FString PendingMatchRoomId;
+    FString PendingMatchId;
 
     FString DedicatedServerId;
     FString DedicatedServerPublicAddress;

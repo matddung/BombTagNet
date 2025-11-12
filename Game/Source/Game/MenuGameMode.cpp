@@ -113,7 +113,7 @@ void AMenuGameMode::PostLogin(APlayerController* NewPlayer)
 #endif
 }
 
-void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* RequestingController, const FString& RoomId, const FString& StartToken)
+void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* RequestingController, const FString& RoomId, const FString& StartToken, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& TravelURL)
 {
     if (!HasAuthority())
     {
@@ -133,7 +133,18 @@ void AMenuGameMode::HandleStartMatchRequest(ABombTagPlayerController* Requesting
         return;
     }
 
-    VerifyStartTokenWithBackend(RequestingController, RoomId, StartToken);
+    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
+    {
+        const FString ExpectedRoomId = GameInstance->GetCurrentRoomId();
+        if (!ExpectedRoomId.IsEmpty() && !RoomId.Equals(ExpectedRoomId, ESearchCase::CaseSensitive))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: room mismatch before verification (expected=%s provided=%s)."), *ExpectedRoomId, *RoomId);
+            RequestingController->ClientNotifyMatchStartDenied(TEXT("ROOM_MISMATCH"));
+            return;
+        }
+    }
+
+    VerifyStartTokenWithBackend(RequestingController, RoomId, StartToken, DedicatedServerAddress, DedicatedServerPort, TravelURL);
 }
 
 void AMenuGameMode::SendClientsToMatch(const FString& TravelURL)
@@ -161,7 +172,7 @@ void AMenuGameMode::SendClientsToMatch(const FString& TravelURL)
     }
 }
 
-void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* RequestingController, const FString& RoomId, const FString& StartToken)
+void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* RequestingController, const FString& RoomId, const FString& StartToken, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& TravelURL)
 {
     if (!RequestingController)
     {
@@ -184,25 +195,22 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
         return;
     }
 
-    const FString ExpectedRoomId = GameInstance->GetCurrentRoomId();
-    const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
-    const FString& RequiredRoomId = !PendingRoomId.IsEmpty() ? PendingRoomId : ExpectedRoomId;
+    const FString RequiredRoomId = GameInstance->GetCurrentRoomId();
     const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
+    const FString PendingMatchId = GameInstance->GetPendingMatchId();
 
 #if !UE_BUILD_SHIPPING
     {
-        const bool bAnyRoomAccepted = PendingRoomId.IsEmpty() && ExpectedRoomId.IsEmpty();
+        const bool bAnyRoomAccepted = RequiredRoomId.IsEmpty();
         const FString RequiredRoomLabel = DescribeOptionalForLog(RequiredRoomId, bAnyRoomAccepted ? TEXT("<any>") : TEXT("<empty>"));
         const FString ProvidedRoomLabel = DescribeOptionalForLog(RoomId, TEXT("<none>"));
-        const FString PendingRoomLabel = DescribeOptionalForLog(PendingRoomId, TEXT("<none>"));
-        const FString ExpectedRoomLabel = DescribeOptionalForLog(ExpectedRoomId, TEXT("<none>"));
+        const FString PendingMatchLabel = DescribeOptionalForLog(PendingMatchId, TEXT("<none>"));
         const FString IncomingTokenLabel = DescribeTokenForLog(StartToken);
         const FString ExpectedTokenLabel = DescribeTokenForLog(ExpectedToken);
 
-        UE_LOG(LogTemp, Log, TEXT("[Match][Server] VerifyStartToken request room=%s pendingRoom=%s expectedRoom=%s requiredRoom=%s startToken=%s expectedToken=%s"),
+        UE_LOG(LogTemp, Log, TEXT("[Match][Server] VerifyStartToken request room=%s pendingMatch=%s requiredRoom=%s startToken=%s expectedToken=%s"),
             *ProvidedRoomLabel,
-            *PendingRoomLabel,
-            *ExpectedRoomLabel,
+            *PendingMatchLabel,
             *RequiredRoomLabel,
             *IncomingTokenLabel,
             *ExpectedTokenLabel);
@@ -260,15 +268,15 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
     TWeakObjectPtr<ABombTagPlayerController> WeakController(RequestingController);
 
     FOnApiResponse Response;
-    Response.BindLambda([this, WeakController, RoomId, StartToken](bool bOk, const FString& BodyOrError)
+    Response.BindLambda([this, WeakController, RoomId, StartToken, DedicatedServerAddress, DedicatedServerPort, TravelURL](bool bOk, const FString& BodyOrError)
         {
-            HandleVerifyStartTokenResponse(WeakController, RoomId, StartToken, bOk, BodyOrError);
+            HandleVerifyStartTokenResponse(WeakController, RoomId, StartToken, DedicatedServerAddress, DedicatedServerPort, TravelURL, bOk, BodyOrError);
         });
 
     ApiClient->PostJson(TEXT("/ds/matches/verify-start"), Content, MoveTemp(Response));
 }
 
-void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayerController> RequestingController, const FString& RoomId, const FString& StartToken, bool bOk, const FString& BodyOrError)
+void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayerController> RequestingController, const FString& RoomId, const FString& StartToken, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& TravelURL, bool bOk, const FString& BodyOrError)
 {
     ABombTagPlayerController* Controller = RequestingController.Get();
     if (!Controller)
@@ -339,10 +347,9 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     }
 #endif
 
-    const FString ExpectedRoomId = GameInstance->GetCurrentRoomId();
-    const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
-    const FString& RequiredRoomId = !PendingRoomId.IsEmpty() ? PendingRoomId : ExpectedRoomId;
+    const FString RequiredRoomId = GameInstance->GetCurrentRoomId();
     const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
+    const FString ExpectedMatchId = ResolveMatchIdentifierForVerification(GameInstance, RoomId);
 
     if (!RequiredRoomId.IsEmpty() && !RoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
     {
@@ -365,7 +372,6 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
         return;
     }
 
-    const FString ExpectedMatchId = ResolveMatchIdentifierForVerification(GameInstance, RoomId);
     if (!ExpectedMatchId.IsEmpty() && !ResponseMatchId.Equals(ExpectedMatchId, ESearchCase::CaseSensitive))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token match mismatch: expected=%s response=%s"), *ExpectedMatchId, *ResponseMatchId);
@@ -400,13 +406,47 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
         }
     }
 
-    FString ExpectedHost = GameInstance->GetPendingMatchServerAddress();
-    int32 ExpectedPort = GameInstance->GetPendingMatchServerPort();
-    FString TravelURL = GameInstance->GetPendingMatchTravelURL();
+    FString ProvidedHost = DedicatedServerAddress;
+    int32 ProvidedPort = DedicatedServerPort;
+    FString ProvidedTravelURL = TravelURL;
 
-    if (ExpectedHost.IsEmpty() || ExpectedPort <= 0 || TravelURL.IsEmpty())
+    const FString StoredHost = GameInstance->GetPendingMatchServerAddress();
+    const int32 StoredPort = GameInstance->GetPendingMatchServerPort();
+    const FString StoredTravelURL = GameInstance->GetPendingMatchTravelURL();
+
+    if (!DedicatedServerAddress.IsEmpty() && !StoredHost.IsEmpty() && !DedicatedServerAddress.Equals(StoredHost, ESearchCase::CaseSensitive))
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (address=%s port=%d url=%s)."), *ExpectedHost, ExpectedPort, *TravelURL);
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch address mismatch: provided=%s stored=%s"), *DedicatedServerAddress, *StoredHost);
+    }
+
+    if (DedicatedServerPort > 0 && StoredPort > 0 && DedicatedServerPort != StoredPort)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch port mismatch: provided=%d stored=%d"), DedicatedServerPort, StoredPort);
+    }
+
+    if (!TravelURL.IsEmpty() && !StoredTravelURL.IsEmpty() && !TravelURL.Equals(StoredTravelURL, ESearchCase::CaseSensitive))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch travel mismatch: provided=%s stored=%s"), *TravelURL, *StoredTravelURL);
+    }
+
+    if (ProvidedHost.IsEmpty())
+    {
+        ProvidedHost = StoredHost;
+    }
+
+    if (ProvidedPort <= 0)
+    {
+        ProvidedPort = StoredPort;
+    }
+
+    if (ProvidedTravelURL.IsEmpty())
+    {
+        ProvidedTravelURL = StoredTravelURL;
+    }
+
+    if (ProvidedHost.IsEmpty() || ProvidedPort <= 0 || ProvidedTravelURL.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (address=%s port=%d url=%s)."), *ProvidedHost, ProvidedPort, *ProvidedTravelURL);
         Reject(TEXT("MATCH_START_DENIED 7"));
         return;
     }
@@ -414,7 +454,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
     int32 ConfiguredPort = GameInstance->GetDedicatedServerGamePort();
     if (ConfiguredPort <= 0)
     {
-        ConfiguredPort = ExpectedPort;
+        ConfiguredPort = ProvidedPort;
     }
 
     const int32 LocalBoundPort = ResolveLocalServerPort(GetWorld());
@@ -425,30 +465,20 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
         return;
     }
 
-    const FString EndpointLabel = BuildEndpointLabel(ExpectedHost, ExpectedPort);
+    const FString EndpointLabel = BuildEndpointLabel(ProvidedHost, ProvidedPort);
     UE_LOG(LogTemp, Log, TEXT("[Match] Match start approved for room %s. Directing clients to %s."), *GetNameSafe(Controller), *RoomId, *EndpointLabel);
 
-    SendClientsToMatch(TravelURL);
+    SendClientsToMatch(ProvidedTravelURL);
 }
 
 FString AMenuGameMode::ResolveMatchIdentifierForVerification(const UBombTagGameInstance* GameInstance, const FString& RoomId) const
 {
+    (void)RoomId;
+
     if (!GameInstance)
     {
         return FString();
     }
 
-    const FString PendingRoomId = GameInstance->GetPendingMatchRoomId();
-    if (!PendingRoomId.IsEmpty())
-    {
-        return PendingRoomId;
-    }
-
-    const FString CurrentRoomId = GameInstance->GetCurrentRoomId();
-    if (!CurrentRoomId.IsEmpty())
-    {
-        return CurrentRoomId;
-    }
-
-    return RoomId;
+    return GameInstance->GetPendingMatchId();
 }

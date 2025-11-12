@@ -39,7 +39,7 @@ public:
     void ClientFinalizeMatchResult(const FBombTagMatchResultSnapshot& FinalSnapshot, bool bIsWinner);
 
     UFUNCTION(Server, Reliable)
-    void ServerRequestStartMatch(const FString& RoomId, const FString& StartToken);
+    void ServerRequestStartMatch(const FString& RoomId, const FString& StartToken, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& TravelURL);
 
     UFUNCTION(Client, Reliable)
     void ClientNotifyMatchStartDenied(const FString& ErrorCode);

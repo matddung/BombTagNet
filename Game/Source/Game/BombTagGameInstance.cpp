@@ -558,7 +558,6 @@ void UBombTagGameInstance::Backend_GetRoom()
             if (RoomSummary.Status.Equals(TEXT("STARTED"), ESearchCase::IgnoreCase) && !bRoomHasStarted)
             {
                 bRoomHasStarted = true;
-                PendingMatchRoomId = RoomSummary.RoomId;
                 PrepareMatchLaunch(RoomSummary.DedicatedServerAddress, RoomSummary.DedicatedServerPort, RoomSummary.StartToken, RoomSummary.DedicatedServerId, RoomSummary.StartTokenExpiresAt);
                 OnRoomStarted.Broadcast(true, RoomSummary.RoomId);
             }
@@ -573,7 +572,7 @@ void UBombTagGameInstance::ResetCurrentSessionState()
     PendingMatchStartToken.Reset();
     PendingMatchDedicatedServerId.Reset();
     PendingMatchStartTokenExpiresAt.Reset();
-    PendingMatchRoomId.Reset();
+    PendingMatchId.Reset();
 }
 
 void UBombTagGameInstance::ResetMatchQueueState()
@@ -588,7 +587,7 @@ void UBombTagGameInstance::ResetMatchQueueState()
     PendingMatchStartToken.Reset();
     PendingMatchDedicatedServerId.Reset();
     PendingMatchStartTokenExpiresAt.Reset();
-    PendingMatchRoomId.Reset();
+    PendingMatchId.Reset();
 }
 
 void UBombTagGameInstance::StartMatchQueuePolling()
@@ -636,7 +635,7 @@ void UBombTagGameInstance::HandleMatchQueueStatusResult(bool bSuccess, const FMa
         if (!bMatchQueueLaunched)
         {
             bMatchQueueLaunched = true;
-            PendingMatchRoomId = Status.MatchId;
+            PendingMatchId = Status.MatchId;
             PrepareMatchLaunch(Status.DedicatedServerAddress, Status.DedicatedServerPort, Status.StartToken, Status.DedicatedServerId, Status.StartTokenExpiresAt);
             RequestServerMatchStart();
         }
@@ -702,7 +701,7 @@ FString UBombTagGameInstance::GetPendingMatchTravelURL() const
 
     TArray<FString> Options;
 
-    const FString MatchIdentifier = !PendingMatchRoomId.IsEmpty() ? PendingMatchRoomId : CurrentRoomId;
+    const FString MatchIdentifier = !PendingMatchId.IsEmpty() ? PendingMatchId : CurrentRoomId;
     if (!MatchIdentifier.IsEmpty())
     {
         Options.Add(FString::Printf(TEXT("matchId=%s"), *MatchIdentifier));
@@ -749,7 +748,7 @@ void UBombTagGameInstance::Backend_StartRoom()
 
             UE_LOG(LogTemp, Log, TEXT("MatchId=%s dedicatedAddress=%s port=%d dsId=%s"), *Info.MatchId, *Info.DedicatedServerAddress, Info.DedicatedServerPort, *Info.DedicatedServerId);
             bRoomHasStarted = true;
-            PendingMatchRoomId = Info.MatchId.IsEmpty() ? CurrentRoomId : Info.MatchId;
+            PendingMatchId = Info.MatchId;
             PrepareMatchLaunch(Info.DedicatedServerAddress, Info.DedicatedServerPort, Info.StartToken, Info.DedicatedServerId, Info.StartTokenExpiresAt);
             OnRoomStarted.Broadcast(true, Info.MatchId);
         });
@@ -817,7 +816,7 @@ void UBombTagGameInstance::Backend_QueryMatchQueueStatus()
 
 void UBombTagGameInstance::RequestServerMatchStart()
 {
-    const FString RoomIdentifier = !PendingMatchRoomId.IsEmpty() ? PendingMatchRoomId : CurrentRoomId;
+    const FString RoomIdentifier = CurrentRoomId;
 
     if (RoomIdentifier.IsEmpty())
     {
@@ -839,8 +838,8 @@ void UBombTagGameInstance::RequestServerMatchStart()
             if (ABombTagPlayerController* BTPC = Cast<ABombTagPlayerController>(PC))
             {
                 const FString DsLabel = !PendingMatchDedicatedServerId.IsEmpty() ? PendingMatchDedicatedServerId : TEXT("<unknown-ds>");
-                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting dedicated match start via RPC (room=%s dedicatedServerId=%s url=%s)."), *RoomIdentifier, *DsLabel, *TravelURL);
-                BTPC->ServerRequestStartMatch(RoomIdentifier, PendingMatchStartToken);
+                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting dedicated match start via RPC (room=%s dedicatedServerId=%s address=%s port=%d url=%s)."), *RoomIdentifier, *DsLabel, *PendingMatchServerAddress, PendingMatchServerPort, *TravelURL);
+                BTPC->ServerRequestStartMatch(RoomIdentifier, PendingMatchStartToken, PendingMatchServerAddress, PendingMatchServerPort, TravelURL);
             }
             else
             {

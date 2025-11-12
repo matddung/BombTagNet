@@ -33,7 +33,6 @@ void ABombTagPlayerController::BeginPlay()
     Super::BeginPlay();
 
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
-    // 매치 흐름 디버깅을 위해 접속 시 현재 맵 정보를 남긴다.
     UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s"), *CurrentMap);
 
 #if !UE_SERVER
@@ -238,7 +237,7 @@ void ABombTagPlayerController::ClientFinalizeMatchResult_Implementation(const FB
 #endif
 }
 
-void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FString& RoomId, const FString& StartToken)
+void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FString& RoomId, const FString& StartToken, const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& TravelURL)
 {
     if (!HasAuthority())
     {
@@ -247,7 +246,6 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
 
     if (RoomId.IsEmpty())
     {
-        // 방 정보 없이 호출되면 즉시 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch received without a room id."));
         ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 1"));
         return;
@@ -255,12 +253,10 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
 
     if (AMenuGameMode* MenuGameMode = GetWorld()->GetAuthGameMode<AMenuGameMode>())
     {
-        // 메뉴 게임모드가 호스트 권한과 백엔드 토큰을 검증한 뒤 트래블을 수행한다.
-        MenuGameMode->HandleStartMatchRequest(this, RoomId, StartToken);
+        MenuGameMode->HandleStartMatchRequest(this, RoomId, StartToken, DedicatedServerAddress, DedicatedServerPort, TravelURL);
     }
     else
     {
-        // 서버에서 메뉴 게임모드가 아닐 경우 안전하게 거부한다.
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch called but menu game mode not available."));
         ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 2"));
     }
@@ -269,7 +265,6 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
 void ABombTagPlayerController::ClientNotifyMatchStartDenied_Implementation(const FString& ErrorCode)
 {
     const FString& CodeToReport = ErrorCode.IsEmpty() ? FString(TEXT("MATCH_START_DENIED 3")) : ErrorCode;
-    // 거부 사유를 표준화된 로그 형식으로 남겨 분석 가능하게 한다.
     UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: %s"), *CodeToReport);
 
 #if !UE_SERVER

@@ -829,7 +829,10 @@ void UMainMenuWidget::HandleRoomStarted(bool bSuccess, const FString& Info)
     {
         if (UBombTagGameInstance* GI = World->GetGameInstance<UBombTagGameInstance>())
         {
-            GI->RequestServerMatchStart();
+            if (!GI->GetPendingMatchStartToken().IsEmpty())
+            {
+                GI->RequestServerMatchStart();
+            }
         }
     }
 }
