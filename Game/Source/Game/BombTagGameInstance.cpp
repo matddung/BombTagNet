@@ -571,13 +571,23 @@ void UBombTagGameInstance::ResetCurrentSessionState()
     ResetMatchQueueState();
     CurrentRoomId.Reset();
     bRoomHasStarted = false;
-    PendingMatchStartToken.Reset();
-    PendingMatchDedicatedServerId.Reset();
-    PendingMatchStartTokenExpiresAt.Reset();
-    PendingMatchId.Reset();
 }
 
-void UBombTagGameInstance::ResetMatchQueueState()
+void UBombTagGameInstance::ResetMatchQueueState(bool bPreservePendingMatchData)
+{
+    StopMatchQueuePolling();
+    CurrentMatchTicketId.Reset();
+    bHasMatchQueueStatus = false;
+    CachedMatchQueueStatus = FMatchQueueStatus();
+    bMatchQueueLaunched = false;
+
+    if (!bPreservePendingMatchData)
+    {
+        ClearPendingMatchData();
+    }
+}
+
+void UBombTagGameInstance::ClearPendingMatchData()
 {
     StopMatchQueuePolling();
     CurrentMatchTicketId.Reset();
@@ -766,7 +776,7 @@ void UBombTagGameInstance::Backend_JoinMatchQueue()
 
     if (bMatchQueueLaunched && CurrentMatchTicketId.IsEmpty())
     {
-        ResetMatchQueueState();
+        ResetMatchQueueState(/*bPreservePendingMatchData=*/true);
     }
 
     if (!CurrentMatchTicketId.IsEmpty())
@@ -846,7 +856,8 @@ void UBombTagGameInstance::RequestServerMatchStart()
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("[Match][Error] First player controller is not ABombTagPlayerController; aborting travel to %s."), *TravelURL);
+                UE_LOG(LogTemp, Error, TEXT("[Match][Error] First PC is not ABombTagPlayerController; cannot request start."));
+                return;
             }
         }
         else

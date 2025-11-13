@@ -360,7 +360,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
 
     const FString RequiredRoomId = GameInstance->GetCurrentRoomId();
     const FString ExpectedToken = GameInstance->GetPendingMatchStartToken();
-    const FString ExpectedMatchId = ResolveMatchIdentifierForVerification(GameInstance, RoomId);
+    const FString PendingMatchId = GameInstance->GetPendingMatchId();
 
     if (!RequiredRoomId.IsEmpty() && !RoomId.Equals(RequiredRoomId, ESearchCase::CaseSensitive))
     {
@@ -386,9 +386,9 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
         return;
     }
 
-    if (!ExpectedMatchId.IsEmpty() && !ResponseMatchId.Equals(ExpectedMatchId, ESearchCase::CaseSensitive))
+    if (!PendingMatchId.IsEmpty() && !ResponseMatchId.IsEmpty() && !ResponseMatchId.Equals(PendingMatchId, ESearchCase::CaseSensitive))
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token match mismatch: expected=%s response=%s"), *ExpectedMatchId, *ResponseMatchId);
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Verified token match mismatch: expected=%s response=%s"), *PendingMatchId, *ResponseMatchId);
         Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("MATCH_START_DENIED 11"));
         return;
@@ -461,6 +461,21 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
         ProvidedTravelURL = StoredTravelURL;
     }
 
+    const int32 ConfiguredPort = GameInstance->GetDedicatedServerGamePort();
+    const int32 LocalBoundPort = ResolveLocalServerPort(GetWorld());
+
+    if (ProvidedPort <= 0)
+    {
+        if (ConfiguredPort > 0)
+        {
+            ProvidedPort = ConfiguredPort;
+        }
+        else if (LocalBoundPort > 0)
+        {
+            ProvidedPort = LocalBoundPort;
+        }
+    }
+
     if (ProvidedHost.IsEmpty() || ProvidedPort <= 0 || ProvidedTravelURL.IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: missing dedicated server endpoint data (address=%s port=%d url=%s)."), *ProvidedHost, ProvidedPort, *ProvidedTravelURL);
@@ -469,16 +484,11 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
         return;
     }
 
-    int32 ConfiguredPort = GameInstance->GetDedicatedServerGamePort();
-    if (ConfiguredPort <= 0)
-    {
-        ConfiguredPort = ProvidedPort;
-    }
+    const int32 ExpectedPortForLocalCheck = (ConfiguredPort > 0) ? ConfiguredPort : ProvidedPort;
 
-    const int32 LocalBoundPort = ResolveLocalServerPort(GetWorld());
-    if (ConfiguredPort > 0 && LocalBoundPort > 0 && ConfiguredPort != LocalBoundPort)
+    if (ExpectedPortForLocalCheck > 0 && LocalBoundPort > 0 && ExpectedPortForLocalCheck != LocalBoundPort)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Dedicated server port mismatch: expected %d actual %d"), ConfiguredPort, LocalBoundPort);
+        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Dedicated server port mismatch: expected %d actual %d"), ExpectedPortForLocalCheck, LocalBoundPort);
         Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
         Reject(TEXT("MATCH_START_DENIED 15"));
         return;
@@ -486,7 +496,7 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
 
     const FString EndpointLabel = BuildEndpointLabel(ProvidedHost, ProvidedPort);
     UE_LOG(LogTemp, Log, TEXT("[Match] Match start approved for room %s. Directing clients to %s."), *GetNameSafe(Controller), *RoomId, *EndpointLabel);
-    Controller->ClientDebugVerifyStartResult(VerificationSummary, false, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
+    Controller->ClientDebugVerifyStartResult(VerificationSummary, true, ResponseRoomId, ResponseMatchId, ResponseDedicatedServerId);
 
     SendClientsToMatch(ProvidedTravelURL);
 }

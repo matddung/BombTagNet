@@ -246,21 +246,6 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
         return;
     }
 
-    FString ResolvedAddr = DedicatedServerAddress;
-    int32  ResolvedPort = DedicatedServerPort;
-    FString ResolvedTravelURL = TravelURL;
-
-    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
-    {
-        const FString& GIAddr = GameInstance->GetPendingMatchServerAddress();
-        const int32    GIPort = GameInstance->GetPendingMatchServerPort();
-        const FString& GIURL = GameInstance->GetPendingMatchTravelURL();
-
-        if (!GIAddr.IsEmpty()) { ResolvedAddr = GIAddr; }
-        if (GIPort > 0) { ResolvedPort = GIPort; }
-        if (!GIURL.IsEmpty()) { ResolvedTravelURL = GIURL; }
-    }
-
     if (RoomId.IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch received without a room id."));
@@ -268,7 +253,7 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
         return;
     }
 
-    ClientDebugMatchStartSnapshot(RoomId, StartToken, ResolvedAddr, ResolvedPort, ResolvedTravelURL);
+    ClientDebugMatchStartSnapshot(RoomId, StartToken, DedicatedServerAddress, DedicatedServerPort, TravelURL);
 
     if (AMenuGameMode* MenuGameMode = GetWorld()->GetAuthGameMode<AMenuGameMode>())
     {

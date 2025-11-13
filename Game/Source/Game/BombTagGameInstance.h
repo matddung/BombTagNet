@@ -139,7 +139,8 @@ private:
     bool IsAsciiAlphanumeric(TCHAR Character) const;
 
     void ResetCurrentSessionState();
-    void ResetMatchQueueState();
+    void ResetMatchQueueState(bool bPreservePendingMatchData = false);
+    void ClearPendingMatchData();
     void StartMatchQueuePolling();
     void StopMatchQueuePolling();
     void HandleMatchQueueStatusResult(bool bSuccess, const FMatchQueueStatus& Status, const FString& ErrorMessage);
