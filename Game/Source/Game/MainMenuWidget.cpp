@@ -12,8 +12,6 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Misc/Char.h"
-#include "Algo/Sort.h"
-#include "HAL/PlatformTime.h"
 
 namespace
 {
@@ -113,12 +111,6 @@ void UMainMenuWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    bWaitingRoomHasErrorMessage = false;
-    WaitingRoomLastTrafficMessage.Reset();
-    ClearTrafficMessageTimers();
-    WaitingRoomMessages.Reset();
-    WaitingRoomTrafficSequence = 0;
-
     MatchMenuBaseText = NSLOCTEXT("Match", "Searching", "Searching for Match");
 
     if (UWorld* World = GetWorld())
@@ -169,8 +161,6 @@ void UMainMenuWidget::NativeDestruct()
 {
     StopWaitingRoomSlotUpdates();
     LeaveMatchQueue();
-    ClearTrafficMessageTimers();
-    WaitingRoomMessages.Reset();
 
     if (UWorld* World = GetWorld())
     {
@@ -225,11 +215,6 @@ void UMainMenuWidget::OpenMainMenu()
 {
     StopWaitingRoomSlotUpdates();
     LeaveMatchQueue();
-    ClearTrafficMessageTimers();
-    WaitingRoomMessages.Reset();
-    WaitingRoomLastTrafficMessage.Reset();
-    WaitingRoomTrafficSequence = 0;
-    bWaitingRoomHasErrorMessage = false;
     if (MenuSwitcher && MainMenu) MenuSwitcher->SetActiveWidget(MainMenu);
 }
 
@@ -243,11 +228,6 @@ void UMainMenuWidget::OpenWaitingRoomMenu()
 {
     LeaveMatchQueue();
     if (MenuSwitcher && WaitingRoomMenu) MenuSwitcher->SetActiveWidget(WaitingRoomMenu);
-    ClearTrafficMessageTimers();
-    WaitingRoomMessages.Reset();
-    WaitingRoomLastTrafficMessage.Reset();
-    WaitingRoomTrafficSequence = 0;
-    bWaitingRoomHasErrorMessage = false;
     ShowErrorMessage(WaitingRoomMenuStatusText, FString());
     StartWaitingRoomSlotUpdates();
 }
@@ -736,29 +716,15 @@ void UMainMenuWidget::ShowErrorMessage(UTextBlock* Target, const FString& Messag
         return;
     }
 
-    const bool bIsWaitingStatus = Target == WaitingRoomMenuStatusText;
-
     if (Message.IsEmpty())
     {
-        if (bIsWaitingStatus)
-        {
-            bWaitingRoomHasErrorMessage = false;
-            RefreshWaitingRoomTrafficDisplay();
-        }
-        else
-        {
-            Target->SetText(FText::GetEmpty());
-            Target->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-        }
+        Target->SetText(FText::GetEmpty());
+        Target->SetColorAndOpacity(FSlateColor(FLinearColor::White));
     }
     else
     {
         Target->SetText(FText::FromString(Message));
         Target->SetColorAndOpacity(FSlateColor(FLinearColor::Red));
-        if (bIsWaitingStatus)
-        {
-            bWaitingRoomHasErrorMessage = true;
-        }
     }
 }
 
@@ -801,195 +767,29 @@ bool UMainMenuWidget::IsLocalWaitingRoomHost() const
     return false;
 }
 
-void UMainMenuWidget::RefreshWaitingRoomTrafficDisplay()
-{
-    if (!WaitingRoomMenuStatusText || bWaitingRoomHasErrorMessage)
-    {
-        return;
-    }
-
-    TArray<const FWaitingRoomMessageEntry*> OrderedEntries;
-    OrderedEntries.Reserve(WaitingRoomMessages.Num());
-    for (const FWaitingRoomMessageEntry& Entry : WaitingRoomMessages)
-    {
-        if (!Entry.Message.Text.IsEmpty())
-        {
-            OrderedEntries.Add(&Entry);
-        }
-    }
-
-    OrderedEntries.Sort([](const FWaitingRoomMessageEntry& A, const FWaitingRoomMessageEntry& B)
-        {
-            return A.CreatedAt > B.CreatedAt;
-        });
-
-    if (OrderedEntries.IsEmpty())
-    {
-        WaitingRoomLastTrafficMessage.Reset();
-        WaitingRoomMenuStatusText->SetText(FText::GetEmpty());
-        WaitingRoomMenuStatusText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-        return;
-    }
-
-    FString Combined;
-    for (int32 Index = 0; Index < OrderedEntries.Num(); ++Index)
-    {
-        const FTrafficMsg& EntryMessage = OrderedEntries[Index]->Message;
-        Combined.Append(GetSeverityLabel(EntryMessage.Severity));
-        Combined.Append(EntryMessage.Text.ToString());
-
-        if (Index < OrderedEntries.Num() - 1)
-        {
-            Combined.AppendChar(TEXT('\n'));
-        }
-    }
-
-    WaitingRoomLastTrafficMessage = Combined;
-    WaitingRoomMenuStatusText->SetText(FText::FromString(WaitingRoomLastTrafficMessage));
-    WaitingRoomMenuStatusText->SetColorAndOpacity(GetColorForSeverity(OrderedEntries[0]->Message.Severity));
-}
-
-void UMainMenuWidget::OnTrafficMessageExpired(FString ExpiredKey)
-{
-    const int32 Index = WaitingRoomMessages.IndexOfByPredicate([&ExpiredKey](const FWaitingRoomMessageEntry& Entry)
-        {
-            return Entry.ResolvedKey.Equals(ExpiredKey, ESearchCase::CaseSensitive);
-        });
-
-    if (Index == INDEX_NONE)
-    {
-        return;
-    }
-
-    if (UWorld* World = GetWorld())
-    {
-        World->GetTimerManager().ClearTimer(WaitingRoomMessages[Index].TimerHandle);
-    }
-
-    WaitingRoomMessages.RemoveAt(Index);
-    RefreshWaitingRoomTrafficDisplay();
-}
-
-FSlateColor UMainMenuWidget::GetColorForSeverity(ETrafficSeverity Severity) const
-{
-    switch (Severity)
-    {
-    case ETrafficSeverity::Success:
-        return FSlateColor(FLinearColor(0.2f, 0.8f, 0.2f));
-    case ETrafficSeverity::Warn:
-        return FSlateColor(FLinearColor(1.0f, 0.8f, 0.2f));
-    case ETrafficSeverity::Error:
-        return FSlateColor(FLinearColor(0.9f, 0.2f, 0.2f));
-    default:
-        return FSlateColor(FLinearColor::White);
-    }
-}
-
-FString UMainMenuWidget::GetSeverityLabel(ETrafficSeverity Severity) const
-{
-    switch (Severity)
-    {
-    case ETrafficSeverity::Success:
-        return TEXT("[Success] ");
-    case ETrafficSeverity::Warn:
-        return TEXT("[Warn] ");
-    case ETrafficSeverity::Error:
-        return TEXT("[Error] ");
-    default:
-        return TEXT("[Info] ");
-    }
-}
-
-void UMainMenuWidget::ClearTrafficMessageTimers()
-{
-    if (UWorld* World = GetWorld())
-    {
-        for (FWaitingRoomMessageEntry& Entry : WaitingRoomMessages)
-        {
-            World->GetTimerManager().ClearTimer(Entry.TimerHandle);
-        }
-    }
-}
-
 void UMainMenuWidget::HandleBackendTrafficMessage(const FTrafficMsg& Message)
 {
+    if (!WaitingRoomMenuStatusText)
+    {
+        return;
+    }
+
     if (!ShouldDisplayHostOnlyMessage(Message))
     {
         return;
     }
 
-    FTrafficMsg FilteredMessage = Message;
+    const bool bIsWarning = Message.Severity == ETrafficSeverity::Warn;
+    const bool bIsError = Message.Severity == ETrafficSeverity::Error;
 
-    if (FilteredMessage.bHostOnly && !GVerboseTrafficUI)
+    if (!bIsWarning && !bIsError)
     {
-        const FString& Key = FilteredMessage.Key;
-        if (Key.Equals(TEXT("start.request"), ESearchCase::CaseSensitive))
-        {
-            FilteredMessage.Text = FText::FromString(TEXT("Match Starting..."));
-        }
-        else if (Key.Equals(TEXT("rpc.snapshot"), ESearchCase::CaseSensitive))
-        {
-            FilteredMessage.Text = FText::FromString(TEXT("[RPC] Match Update"));
-        }
-        else if (Key.Equals(TEXT("verify.result"), ESearchCase::CaseSensitive))
-        {
-            const TCHAR* StatusLabel = FilteredMessage.Severity == ETrafficSeverity::Success
-                ? TEXT("Successed")
-                : TEXT("Ing");
-            FilteredMessage.Text = FText::FromString(StatusLabel);
-        }
+        return;
     }
 
-    FWaitingRoomMessageEntry* EntryToUpdate = nullptr;
-    if (!FilteredMessage.Key.IsEmpty())
-    {
-        EntryToUpdate = WaitingRoomMessages.FindByPredicate([&FilteredMessage](const FWaitingRoomMessageEntry& Entry)
-            {
-                return Entry.Message.Key.Equals(FilteredMessage.Key, ESearchCase::CaseSensitive);
-            });
-    }
-
-    if (!EntryToUpdate)
-    {
-        FWaitingRoomMessageEntry NewEntry;
-        NewEntry.Message = FilteredMessage;
-        NewEntry.CreatedAt = FPlatformTime::Seconds();
-        NewEntry.ResolvedKey = !FilteredMessage.Key.IsEmpty()
-            ? FilteredMessage.Key
-            : FString::Printf(TEXT("anon.%d"), ++WaitingRoomTrafficSequence);
-        WaitingRoomMessages.Add(MoveTemp(NewEntry));
-        EntryToUpdate = &WaitingRoomMessages.Last();
-    }
-    else
-    {
-        if (UWorld* World = GetWorld())
-        {
-            World->GetTimerManager().ClearTimer(EntryToUpdate->TimerHandle);
-        }
-
-        EntryToUpdate->Message = FilteredMessage;
-        EntryToUpdate->CreatedAt = FPlatformTime::Seconds();
-        if (!FilteredMessage.Key.IsEmpty())
-        {
-            EntryToUpdate->ResolvedKey = FilteredMessage.Key;
-        }
-    }
-
-    if (UWorld* World = GetWorld())
-    {
-        if (EntryToUpdate->Message.TTLSeconds > 0.f)
-        {
-            FTimerDelegate Delegate;
-            Delegate.BindUObject(this, &UMainMenuWidget::OnTrafficMessageExpired, EntryToUpdate->ResolvedKey);
-            World->GetTimerManager().SetTimer(EntryToUpdate->TimerHandle, Delegate, EntryToUpdate->Message.TTLSeconds, false);
-        }
-        else
-        {
-            World->GetTimerManager().ClearTimer(EntryToUpdate->TimerHandle);
-        }
-    }
-
-    RefreshWaitingRoomTrafficDisplay();
+    const FLinearColor Color = bIsWarning ? FLinearColor::Yellow : FLinearColor::Red;
+    WaitingRoomMenuStatusText->SetText(Message.Text);
+    WaitingRoomMenuStatusText->SetColorAndOpacity(FSlateColor(Color));
 }
 
 void UMainMenuWidget::HandleBackendLogin(bool bSuccess, const FString& ErrorMessage)
@@ -1374,31 +1174,6 @@ bool UMainMenuWidget::ShouldDisplayHostOnlyMessage(const FTrafficMsg& Message) c
 bool UMainMenuWidget::IsLocalWaitingRoomHost() const
 {
     return false;
-}
-
-void UMainMenuWidget::RefreshWaitingRoomTrafficDisplay()
-{
-}
-
-void UMainMenuWidget::OnTrafficMessageExpired(FString ExpiredKey)
-{
-    (void)ExpiredKey;
-}
-
-FSlateColor UMainMenuWidget::GetColorForSeverity(ETrafficSeverity Severity) const
-{
-    (void)Severity;
-    return FSlateColor(FLinearColor::White);
-}
-
-FString UMainMenuWidget::GetSeverityLabel(ETrafficSeverity Severity) const
-{
-    (void)Severity;
-    return FString();
-}
-
-void UMainMenuWidget::ClearTrafficMessageTimers()
-{
 }
 
 #endif

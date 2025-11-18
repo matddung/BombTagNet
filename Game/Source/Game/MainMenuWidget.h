@@ -288,29 +288,12 @@ private:
 
     bool ShouldDisplayHostOnlyMessage(const FTrafficMsg& Message) const;
     bool IsLocalWaitingRoomHost() const;
-    void RefreshWaitingRoomTrafficDisplay();
-    void OnTrafficMessageExpired(FString ExpiredKey);
-    FSlateColor GetColorForSeverity(ETrafficSeverity Severity) const;
-    FString GetSeverityLabel(ETrafficSeverity Severity) const;
-    void ClearTrafficMessageTimers();
 
     FTimerHandle   MatchDotsTimerHandle;
     int32          MatchDotCount = 1;
     FText          MatchMenuBaseText;
     bool           bAnimateMatchMenuDots = true;
     FTimerHandle   WaitingRoomRefreshTimerHandle;
-    bool           bWaitingRoomHasErrorMessage = false;
-    struct FWaitingRoomMessageEntry
-    {
-        FTrafficMsg Message;
-        FTimerHandle TimerHandle;
-        FString ResolvedKey;
-        double CreatedAt = 0.0;
-    };
-
-    TArray<FWaitingRoomMessageEntry> WaitingRoomMessages;
-    FString        WaitingRoomLastTrafficMessage;
-    int32          WaitingRoomTrafficSequence = 0;
 
     enum class ERoomRequestType : uint8
     {
