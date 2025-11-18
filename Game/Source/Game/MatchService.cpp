@@ -1,60 +1,10 @@
 #include "MatchService.h"
 #include "ApiClient.h"
+#include "Game.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonSerializer.h"
-
-namespace
-{
-    int32 ParseDedicatedServerPort(const TSharedPtr<FJsonObject>& Json)
-    {
-        if (!Json.IsValid())
-        {
-            return 0;
-        }
-
-        int32 Port = 0;
-
-        auto ApplyNumberField = [&Port, &Json](const TCHAR* FieldName)
-            {
-                if (Port > 0)
-                {
-                    return;
-                }
-
-                double NumberValue = 0.0;
-                if (Json->TryGetNumberField(FieldName, NumberValue))
-                {
-                    Port = static_cast<int32>(NumberValue);
-                }
-            };
-
-        ApplyNumberField(TEXT("dedicatedServerPort"));
-        ApplyNumberField(TEXT("port"));
-        ApplyNumberField(TEXT("gamePort"));
-        ApplyNumberField(TEXT("serverPort"));
-
-        auto ApplyStringField = [&Port, &Json](const TCHAR* FieldName)
-            {
-                if (Port > 0)
-                {
-                    return;
-                }
-
-                FString PortString;
-                if (Json->TryGetStringField(FieldName, PortString))
-                {
-                    Port = FCString::Atoi(*PortString);
-                }
-            };
-
-        ApplyStringField(TEXT("port"));
-        ApplyStringField(TEXT("dedicatedServerPort"));
-
-        return Port;
-    }
-}
 
 void UMatchService::Init(UApiClient* InApi)
 {
@@ -239,7 +189,7 @@ bool UMatchService::ParseMatchQueueStatus(const TSharedPtr<FJsonObject>& JsonObj
 
     JsonObject->TryGetStringField(TEXT("dedicatedServerAddress"), OutStatus.DedicatedServerAddress);
 
-    OutStatus.DedicatedServerPort = ParseDedicatedServerPort(JsonObject);
+    OutStatus.DedicatedServerPort = BombTag::Json::ParseDedicatedServerPort(JsonObject);
 
     JsonObject->TryGetStringField(TEXT("dedicatedServerId"), OutStatus.DedicatedServerId);
     JsonObject->TryGetStringField(TEXT("startToken"), OutStatus.StartToken);

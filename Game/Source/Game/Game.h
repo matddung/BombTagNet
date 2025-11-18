@@ -3,15 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Dom/JsonObject.h"
 
 #ifndef BOMB_TAG_ENSURE_FORBID_CLIENT_TRAVEL
-// 개발/테스트 환경에서는 클라이언트 트래블 호출을 즉시 감지해 로그를 남기고,
-// 서버 전용 또는 셰핑 빌드에서는 비활성화한다.
 #define BOMB_TAG_ENSURE_FORBID_CLIENT_TRAVEL (!UE_SERVER && !UE_BUILD_SHIPPING)
 #endif
 
 #if BOMB_TAG_ENSURE_FORBID_CLIENT_TRAVEL
-// 특정 호출 지점(Context)에서 클라이언트 트래블 시도를 한 번만 ensure로 경고한다.
 #define BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(Context) \
     do \
     { \
@@ -25,3 +23,92 @@
 #else
 #define BOMB_TAG_ENSURE_NO_CLIENT_TRAVEL(Context) ((void)0)
 #endif
+
+namespace BombTag
+{
+    namespace Logging
+    {
+        inline FString DescribeOptionalForLog(const FString& Value, const TCHAR* EmptyLabel = TEXT("<empty>"))
+        {
+            FString Trimmed = Value;
+            Trimmed.TrimStartAndEndInline();
+
+            if (Trimmed.IsEmpty())
+            {
+                return FString(EmptyLabel);
+            }
+
+            return Trimmed;
+        }
+
+        inline FString DescribeTokenForLog(const FString& Token)
+        {
+            FString Trimmed = Token;
+            Trimmed.TrimStartAndEndInline();
+
+            if (Trimmed.IsEmpty())
+            {
+                return FString(TEXT("<empty>"));
+            }
+
+            const int32 Length = Trimmed.Len();
+            if (Length <= 12)
+            {
+                return FString::Printf(TEXT("%s (len=%d)"), *Trimmed, Length);
+            }
+
+            return FString::Printf(TEXT("%s...%s (len=%d)"), *Trimmed.Left(6), *Trimmed.Right(4), Length);
+        }
+    }
+
+    namespace Json
+    {
+        inline int32 ParseDedicatedServerPort(const TSharedPtr<FJsonObject>& JsonObject)
+        {
+            if (!JsonObject.IsValid())
+            {
+                return 0;
+            }
+
+            int32 Port = 0;
+
+            auto ApplyNumberField = [&Port, &JsonObject](const TCHAR* FieldName)
+                {
+                    if (Port > 0)
+                    {
+                        return;
+                    }
+
+                    double NumberValue = 0.0;
+                    if (JsonObject->TryGetNumberField(FieldName, NumberValue))
+                    {
+                        Port = static_cast<int32>(NumberValue);
+                    }
+                };
+
+            ApplyNumberField(TEXT("dedicatedServerPort"));
+            ApplyNumberField(TEXT("port"));
+            ApplyNumberField(TEXT("gamePort"));
+            ApplyNumberField(TEXT("serverPort"));
+
+            auto ApplyStringField = [&Port, &JsonObject](const TCHAR* FieldName)
+                {
+                    if (Port > 0)
+                    {
+                        return;
+                    }
+
+                    FString PortString;
+                    if (JsonObject->TryGetStringField(FieldName, PortString))
+                    {
+                        Port = FCString::Atoi(*PortString);
+                    }
+                };
+
+            ApplyStringField(TEXT("port"));
+            ApplyStringField(TEXT("dedicatedServerPort"));
+
+            return Port;
+        }
+    }
+}

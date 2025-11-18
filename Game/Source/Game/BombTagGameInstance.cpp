@@ -23,40 +23,6 @@ namespace
     const TCHAR* PlayerSaveSlotName = TEXT("PlayerProfile");
     const TCHAR* DefaultBackendBaseUrl = TEXT("https://api.studyjun.net/api");
 
-#if !UE_BUILD_SHIPPING
-    FString DescribeOptionalForLog(const FString& Value, const TCHAR* EmptyLabel = TEXT("<empty>"))
-    {
-        FString Trimmed = Value;
-        Trimmed.TrimStartAndEndInline();
-
-        if (Trimmed.IsEmpty())
-        {
-            return FString(EmptyLabel);
-        }
-
-        return Trimmed;
-    }
-
-    FString DescribeTokenForLog(const FString& Token)
-    {
-        FString Trimmed = Token;
-        Trimmed.TrimStartAndEndInline();
-
-        if (Trimmed.IsEmpty())
-        {
-            return FString(TEXT("<empty>"));
-        }
-
-        const int32 Length = Trimmed.Len();
-        if (Length <= 12)
-        {
-            return FString::Printf(TEXT("%s (len=%d)"), *Trimmed, Length);
-        }
-
-        return FString::Printf(TEXT("%s...%s (len=%d)"), *Trimmed.Left(6), *Trimmed.Right(4), Length);
-    }
-#endif
-
     bool IsBackendBaseUrlValid(FString& Url)
     {
         Url.TrimStartAndEndInline();
@@ -681,10 +647,10 @@ void UBombTagGameInstance::PrepareMatchLaunch(const FString& DedicatedServerAddr
     PendingMatchStartTokenExpiresAt = StartTokenExpiresAt;
 
 #if !UE_BUILD_SHIPPING
-    const FString AddressLabel = DescribeOptionalForLog(ResolvedAddress);
-    const FString DsLabel = DescribeOptionalForLog(DSId);
-    const FString ExpirationLabel = DescribeOptionalForLog(StartTokenExpiresAt, TEXT("<unspecified>"));
-    const FString TokenPreview = DescribeTokenForLog(StartToken);
+    const FString AddressLabel = BombTag::Logging::DescribeOptionalForLog(ResolvedAddress);
+    const FString DsLabel = BombTag::Logging::DescribeOptionalForLog(DSId);
+    const FString ExpirationLabel = BombTag::Logging::DescribeOptionalForLog(StartTokenExpiresAt, TEXT("<unspecified>"));
+    const FString TokenPreview = BombTag::Logging::DescribeTokenForLog(StartToken);
 
     UE_LOG(LogTemp, Log, TEXT("[Match][Client] PrepareMatchLaunch serverAddress=%s port=%d dsId=%s startToken=%s expiresAt=%s"),
         *AddressLabel,

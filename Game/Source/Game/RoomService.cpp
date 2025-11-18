@@ -1,60 +1,10 @@
 #include "RoomService.h"
 #include "ApiClient.h"
+#include "Game.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonSerializer.h"
-
-namespace
-{
-    int32 ParseDedicatedServerPort(const TSharedPtr<FJsonObject>& Json)
-    {
-        if (!Json.IsValid())
-        {
-            return 0;
-        }
-
-        int32 Port = 0;
-
-        auto ApplyNumberField = [&Port, &Json](const TCHAR* FieldName)
-            {
-                if (Port > 0)
-                {
-                    return;
-                }
-
-                double NumberValue = 0.0;
-                if (Json->TryGetNumberField(FieldName, NumberValue))
-                {
-                    Port = static_cast<int32>(NumberValue);
-                }
-            };
-
-        ApplyNumberField(TEXT("dedicatedServerPort"));
-        ApplyNumberField(TEXT("port"));
-        ApplyNumberField(TEXT("gamePort"));
-        ApplyNumberField(TEXT("serverPort"));
-
-        auto ApplyStringField = [&Port, &Json](const TCHAR* FieldName)
-            {
-                if (Port > 0)
-                {
-                    return;
-                }
-
-                FString PortString;
-                if (Json->TryGetStringField(FieldName, PortString))
-                {
-                    Port = FCString::Atoi(*PortString);
-                }
-            };
-
-        ApplyStringField(TEXT("port"));
-        ApplyStringField(TEXT("dedicatedServerPort"));
-
-        return Port;
-    }
-}
 
 void URoomService::Init(UApiClient* InApi)
 {
@@ -364,7 +314,7 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
             FMatchStartInfo Info;
             Info.MatchId = MatchId;
 
-            Info.DedicatedServerPort = ParseDedicatedServerPort(RootObject);
+            Info.DedicatedServerPort = BombTag::Json::ParseDedicatedServerPort(RootObject);
 
             RootObject->TryGetStringField(TEXT("dedicatedServerAddress"), Info.DedicatedServerAddress);
             RootObject->TryGetStringField(TEXT("dedicatedServerId"), Info.DedicatedServerId);
@@ -406,7 +356,7 @@ bool URoomService::ParseRoomSummary(const TSharedPtr<FJsonObject>& JsonObject, F
     JsonObject->TryGetStringField(TEXT("dedicatedServerAddress"), OutSummary.DedicatedServerAddress);
     JsonObject->TryGetStringField(TEXT("dedicatedServerInternalAddress"), OutSummary.DedicatedServerInternalAddress);
 
-    OutSummary.DedicatedServerPort = ParseDedicatedServerPort(JsonObject);
+    OutSummary.DedicatedServerPort = BombTag::Json::ParseDedicatedServerPort(JsonObject);
 
     JsonObject->TryGetStringField(TEXT("dedicatedServerId"), OutSummary.DedicatedServerId);
     JsonObject->TryGetStringField(TEXT("startToken"), OutSummary.StartToken);

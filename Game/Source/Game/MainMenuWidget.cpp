@@ -474,22 +474,11 @@ UTextBlock* UMainMenuWidget::GetWaitingRoomSlotRecordText(int32 PlayerIndex) con
 
 void UMainMenuWidget::StartWaitingRoomSlotUpdates()
 {
-    if (UWorld* World = GetWorld())
+    if (GetWorld())
     {
         bIsWaitingRoomVisible = true;
         UpdateWaitingRoomSlotsFromGameState();
         RequestRoomSummaryRefresh();
-
-        if (!World->GetTimerManager().IsTimerActive(WaitingRoomRefreshTimerHandle))
-        {
-            World->GetTimerManager().SetTimer(
-                WaitingRoomRefreshTimerHandle,
-                this,
-                &UMainMenuWidget::RequestRoomSummaryRefresh,
-                2.0f,
-                true
-            );
-        }
     }
 }
 

@@ -3,6 +3,7 @@
 #include "BombTagGameInstance.h"
 #include "GameModeTravelUtils.h"
 #include "ApiClient.h"
+#include "Game.h"
 
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
@@ -23,40 +24,6 @@ namespace
 
         return Port > 0 ? FString::Printf(TEXT("%s:%d"), *Host, Port) : Host;
     }
-
-#if !UE_BUILD_SHIPPING
-    FString DescribeOptionalForLog(const FString& Value, const TCHAR* EmptyLabel = TEXT("<empty>"))
-    {
-        FString Trimmed = Value;
-        Trimmed.TrimStartAndEndInline();
-
-        if (Trimmed.IsEmpty())
-        {
-            return FString(EmptyLabel);
-        }
-
-        return Trimmed;
-    }
-
-    FString DescribeTokenForLog(const FString& Token)
-    {
-        FString Trimmed = Token;
-        Trimmed.TrimStartAndEndInline();
-
-        if (Trimmed.IsEmpty())
-        {
-            return FString(TEXT("<empty>"));
-        }
-
-        const int32 Length = Trimmed.Len();
-        if (Length <= 12)
-        {
-            return FString::Printf(TEXT("%s (len=%d)"), *Trimmed, Length);
-        }
-
-        return FString::Printf(TEXT("%s...%s (len=%d)"), *Trimmed.Left(6), *Trimmed.Right(4), Length);
-    }
-#endif
 
     int32 ResolveLocalServerPort(const UWorld* World)
     {
@@ -204,11 +171,11 @@ void AMenuGameMode::VerifyStartTokenWithBackend(ABombTagPlayerController* Reques
 #if !UE_BUILD_SHIPPING
     {
         const bool bAnyRoomAccepted = RequiredRoomId.IsEmpty();
-        const FString RequiredRoomLabel = DescribeOptionalForLog(RequiredRoomId, bAnyRoomAccepted ? TEXT("<any>") : TEXT("<empty>"));
-        const FString ProvidedRoomLabel = DescribeOptionalForLog(RoomId, TEXT("<none>"));
-        const FString PendingMatchLabel = DescribeOptionalForLog(PendingMatchId, TEXT("<none>"));
-        const FString IncomingTokenLabel = DescribeTokenForLog(StartToken);
-        const FString ExpectedTokenLabel = DescribeTokenForLog(ExpectedToken);
+        const FString RequiredRoomLabel = BombTag::Logging::DescribeOptionalForLog(RequiredRoomId, bAnyRoomAccepted ? TEXT("<any>") : TEXT("<empty>"));
+        const FString ProvidedRoomLabel = BombTag::Logging::DescribeOptionalForLog(RoomId, TEXT("<none>"));
+        const FString PendingMatchLabel = BombTag::Logging::DescribeOptionalForLog(PendingMatchId, TEXT("<none>"));
+        const FString IncomingTokenLabel = BombTag::Logging::DescribeTokenForLog(StartToken);
+        const FString ExpectedTokenLabel = BombTag::Logging::DescribeTokenForLog(ExpectedToken);
 
         UE_LOG(LogTemp, Log, TEXT("[Match][Server] VerifyStartToken request room=%s pendingMatch=%s requiredRoom=%s startToken=%s expectedToken=%s"),
             *ProvidedRoomLabel,
@@ -349,11 +316,11 @@ void AMenuGameMode::HandleVerifyStartTokenResponse(TWeakObjectPtr<ABombTagPlayer
 
 #if !UE_BUILD_SHIPPING
     {
-        const FString PayloadExpirationLabel = DescribeOptionalForLog(ResponseExpiresAt, TEXT("<invalid>"));
+        const FString PayloadExpirationLabel = BombTag::Logging::DescribeOptionalForLog(ResponseExpiresAt, TEXT("<invalid>"));
         UE_LOG(LogTemp, Log, TEXT("[Match][Server] Backend verified token room=%s match=%s dsId=%s expiresAt=%s"),
-            *DescribeOptionalForLog(ResponseRoomId, TEXT("<none>")),
-            *DescribeOptionalForLog(ResponseMatchId, TEXT("<none>")),
-            *DescribeOptionalForLog(ResponseDedicatedServerId, TEXT("<none>")),
+            *BombTag::Logging::DescribeOptionalForLog(ResponseRoomId, TEXT("<none>")),
+            *BombTag::Logging::DescribeOptionalForLog(ResponseMatchId, TEXT("<none>")),
+            *BombTag::Logging::DescribeOptionalForLog(ResponseDedicatedServerId, TEXT("<none>")),
             *PayloadExpirationLabel);
     }
 #endif
