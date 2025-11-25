@@ -882,6 +882,16 @@ void UBombTagGameInstance::HandleBackendTraffic(const FTrafficMsg& Message)
     OnBackendTraffic.Broadcast(Message);
 }
 
+bool UBombTagGameInstance::IsRunningDedicatedServer() const
+{
+    if (const UWorld* World = GetWorld())
+    {
+        return World->IsNetMode(NM_DedicatedServer);
+    }
+
+    return false;
+}
+
 void UBombTagGameInstance::NotifyBackendDedicatedServerReady()
 {
     if (!IsRunningDedicatedServer())

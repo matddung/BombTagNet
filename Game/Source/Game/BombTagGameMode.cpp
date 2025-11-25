@@ -368,6 +368,15 @@ void ABombTagGameMode::HandleReturnToMenu()
     const FString DedicatedServerLabel = BombTag::GameMode::ResolveDedicatedServerLabel(Cast<UBombTagGameInstance>(GetGameInstance()));
     UE_LOG(LogTemp, Log, TEXT("[Match] ServerTravel to %s (Map=%s GameMode=%s DedicatedServer=%s Seamless=%s)"), *MenuReturnURL, *MapName, *GameModePath, *DedicatedServerLabel, bUseSeamlessTravel ? TEXT("true") : TEXT("false"));
 
+    if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
+    {
+        if (GameInstance->IsRunningDedicatedServer())
+        {
+            UE_LOG(LogTemp, Log, TEXT("[DedicatedServer] Re-registering as READY after match completion."));
+            GameInstance->NotifyBackendDedicatedServerReady();
+        }
+    }
+
     if (UWorld* World = GetWorld())
     {
         World->ServerTravel(MenuReturnURL, true);

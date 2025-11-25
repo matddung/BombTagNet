@@ -12,6 +12,7 @@ class UBorder;
 class UResultEntryWidget;
 class UBombTagGameInstance;
 class UMainMenuWidget;
+class UTouchInterface;
 
 UCLASS()
 class GAME_API ABombTagPlayerController : public APlayerController
@@ -75,6 +76,9 @@ protected:
 
     UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
     TArray<UInputMappingContext*> MobileExcludedMappingContexts;
+
+    UPROPERTY(EditAnywhere, Category = "Input|Touch Controls")
+    TSoftObjectPtr<UTouchInterface> TouchInterfaceAsset;
 
     UPROPERTY(EditAnywhere, Category = "Input|Touch Controls")
     TSubclassOf<UUserWidget> MobileControlsWidgetClass;

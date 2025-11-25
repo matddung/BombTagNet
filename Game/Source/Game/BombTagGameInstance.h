@@ -131,6 +131,9 @@ public:
     int32 GetDedicatedServerGamePort() const { return DedicatedServerGamePort; }
     UApiClient* GetApiClient() const { return Api; }
 
+    bool IsRunningDedicatedServer() const;
+    void NotifyBackendDedicatedServerReady();
+
 private:
     void LoadOrCreatePlayerData();
     void SavePlayerData();
@@ -147,7 +150,6 @@ private:
     void PrepareMatchLaunch(const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt);
     void BroadcastPlayerRecord();
     void HandleBackendTraffic(const FTrafficMsg& Message);
-    void NotifyBackendDedicatedServerReady();
     void OnNotifyDedicatedServerReadyResponse(bool bSuccess, const FString& BodyOrError);
 
 private:

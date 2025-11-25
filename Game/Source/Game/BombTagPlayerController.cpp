@@ -463,7 +463,7 @@ void ABombTagPlayerController::ShowMobileControlsIfNeeded()
 
     if (MobileControlsWidget && !MobileControlsWidget->IsInViewport())
     {
-        MobileControlsWidget->AddToPlayerScreen(0);
+        MobileControlsWidget->AddToPlayerScreen(-10);
     }
 #endif
 }
