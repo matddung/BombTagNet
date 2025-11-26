@@ -1,7 +1,6 @@
 package com.BombTagNet.Backend.controller;
 
 import com.BombTagNet.Backend.common.PlayerRequestUtils;
-import com.BombTagNet.Backend.common.RequestIpUtils;
 import com.BombTagNet.Backend.dao.Player;
 import com.BombTagNet.Backend.dao.Room;
 import com.BombTagNet.Backend.dto.RoomDto.*;
@@ -71,15 +70,6 @@ public class RoomController {
                 launch.startToken(),
                 launch.expiresAt() == null ? null : launch.expiresAt().toString()
         );
-
-        log.info("Issuing StartRoomRes roomId={} matchId={} dedicatedServerAddress={} dedicatedServerPort={} startToken={} " +
-                        "startTokenExpiresAt={}",
-                room.roomId(),
-                response.matchId(),
-                response.dedicatedServerAddress(),
-                response.dedicatedServerPort(),
-                response.startToken(),
-                response.startTokenExpiresAt());
 
         return ResponseEntity.ok(response);
     }

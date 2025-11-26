@@ -104,9 +104,6 @@ FReply UResultEntryWidget::NativeOnTouchStarted(const FGeometry& InGeometry, con
 
 void UResultEntryWidget::GoToMenu()
 {
-    // 메뉴 복귀는 서버에서만 수행되므로, 사용자 입력은 대기 로그만 남긴다.
-    UE_LOG(LogTemp, Log, TEXT("[Match] Waiting for server-initiated return to menu."));
-
     if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
     {
         GameInstance->Deprecated_ClientReturnToMenu();

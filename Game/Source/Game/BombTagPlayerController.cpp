@@ -13,6 +13,7 @@
 #include "Widgets/Input/SVirtualJoystick.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -35,12 +36,16 @@ void ABombTagPlayerController::BeginPlay()
     Super::BeginPlay();
 
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
-    UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s"), *CurrentMap);
 
 #if !UE_SERVER
+    const bool bIsMenuGameMode = IsMenuGameMode();
+
     if (IsLocalPlayerController())
     {
-        ShowHUDWidget();
+        if (!bIsMenuGameMode)
+        {
+            ShowHUDWidget();
+        }
 
         FString Nickname;
         if (UBombTagGameInstance* GI = Cast<UBombTagGameInstance>(GetGameInstance()))
@@ -50,8 +55,6 @@ void ABombTagPlayerController::BeginPlay()
         }
         ServerSetPlayerNickname(Nickname);
     }
-
-    ShowMobileControlsIfNeeded();
 #endif
 }
 
@@ -158,8 +161,16 @@ void ABombTagPlayerController::ShowHUDWidget()
         HUDWidget->AddToPlayerScreen();
         TimerText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("TimerText")));
         BorderFlash = Cast<UBorder>(HUDWidget->GetWidgetFromName(TEXT("BorderFlash")));
-        if (BorderFlash) BorderFlash->SetRenderOpacity(0.f);
-        ShowMobileControlsIfNeeded();
+
+        if (BorderFlash) 
+        {
+            BorderFlash->SetRenderOpacity(0.f);
+        }
+
+        if (!IsMenuGameMode())
+        {
+            ShowMobileControlsIfNeeded();
+        }
     }
 #endif
 }
@@ -173,7 +184,6 @@ void ABombTagPlayerController::ServerSetPlayerNickname_Implementation(const FStr
         NicknameToApply.TrimStartAndEndInline();
         if (NicknameToApply.IsEmpty())
         {
-            UE_LOG(LogTemp, Warning, TEXT("ServerSetPlayerNickname called with empty nickname; ignoring."));
             return;
         }
         PlayerState->SetPlayerName(NicknameToApply);
@@ -210,7 +220,6 @@ void ABombTagPlayerController::ClientRequestMatchResultSubmission_Implementation
 
     if (!bIsValid)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Client %s rejected match snapshot and reported hash %s"), *GetName(), *ResultHash);
     }
 #endif
 }
@@ -248,7 +257,6 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
 
     if (RoomId.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch received without a room id."));
         ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 1"));
         return;
     }
@@ -261,7 +269,6 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] ServerRequestStartMatch called but menu game mode not available."));
         ClientNotifyMatchStartDenied(TEXT("MATCH_START_DENIED 2"));
     }
 }
@@ -269,7 +276,6 @@ void ABombTagPlayerController::ServerRequestStartMatch_Implementation(const FStr
 void ABombTagPlayerController::ClientNotifyMatchStartDenied_Implementation(const FString& ErrorCode)
 {
     const FString& CodeToReport = ErrorCode.IsEmpty() ? FString(TEXT("MATCH_START_DENIED 3")) : ErrorCode;
-    UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] Match start denied: %s"), *CodeToReport);
 
 #if !UE_SERVER
     if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
@@ -371,7 +377,6 @@ bool ABombTagPlayerController::ValidateMatchSnapshot(const FBombTagMatchResultSn
     {
         if (!KnownPlayers.Contains(Entry.PlayerName))
         {
-            UE_LOG(LogTemp, Warning, TEXT("Unknown player '%s' in submitted match snapshot"), *Entry.PlayerName);
             return false;
         }
     }
@@ -446,6 +451,11 @@ void ABombTagPlayerController::ShowMobileControlsIfNeeded()
         return;
     }
 
+    if (IsMenuGameMode())
+    {
+        return;
+    }
+
     if (!SVirtualJoystick::ShouldDisplayTouchInterface())
     {
         return;
@@ -456,7 +466,6 @@ void ABombTagPlayerController::ShowMobileControlsIfNeeded()
         MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
         if (!MobileControlsWidget)
         {
-            UE_LOG(LogTemp, Error, TEXT("Could not create mobile controls widget."));
             return;
         }
     }
@@ -476,4 +485,32 @@ void ABombTagPlayerController::HideMobileControls()
         MobileControlsWidget->RemoveFromParent();
     }
 #endif
+}
+
+bool ABombTagPlayerController::IsMenuGameMode() const
+{
+    const UWorld* World = GetWorld();
+    if (!World)
+    {
+        return false;
+    }
+
+    if (const AGameModeBase* GameMode = World->GetAuthGameMode())
+    {
+        if (GameMode->IsA<AMenuGameMode>())
+        {
+            return true;
+        }
+    }
+
+    if (const AGameStateBase* GameState = World->GetGameState<AGameStateBase>())
+    {
+        const TSubclassOf<AGameModeBase> GameModeClass = GameState->GameModeClass;
+        if (GameModeClass && GameModeClass->IsChildOf(AMenuGameMode::StaticClass()))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }

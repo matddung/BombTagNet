@@ -148,7 +148,6 @@ void ABombTagCharacter::SetHasBomb_Server(bool bNewHasBomb)
 
 void ABombTagCharacter::OnRep_HasBomb()
 {
-	UE_LOG(LogTemp, Warning, TEXT("%s HasBomb=%d"), *GetName(), bHasBomb);
 	if (BombIndicator)
 	{
 		BombIndicator->SetVisibility(bHasBomb);

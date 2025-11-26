@@ -150,7 +150,6 @@ private:
     void PrepareMatchLaunch(const FString& DedicatedServerAddress, int32 DedicatedServerPort, const FString& StartToken, const FString& DSId, const FString& StartTokenExpiresAt);
     void BroadcastPlayerRecord();
     void HandleBackendTraffic(const FTrafficMsg& Message);
-    void OnNotifyDedicatedServerReadyResponse(bool bSuccess, const FString& BodyOrError);
 
 private:
     UPROPERTY()

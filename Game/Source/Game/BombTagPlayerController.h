@@ -106,6 +106,7 @@ protected:
 
 private:
     bool ValidateMatchSnapshot(const FBombTagMatchResultSnapshot& Snapshot) const;
+    bool IsMenuGameMode() const;
 
 #if !UE_SERVER
     UMainMenuWidget* ResolveWaitingRoomWidget() const;

@@ -15,7 +15,6 @@ void URoomService::CreateRoom(const FString& Name, int32 MaxPlayers, const FStri
 {
     if (!ApiClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("CreateRoom failed: ApiClient not initialized"));
         if (Callback)
         {
             Callback(false, FRoomSummary(), TEXT("NOT_INITIALIZED"));
@@ -32,7 +31,6 @@ void URoomService::CreateRoom(const FString& Name, int32 MaxPlayers, const FStri
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Content);
     if (!FJsonSerializer::Serialize(Payload, Writer))
     {
-        UE_LOG(LogTemp, Error, TEXT("JSON_SERIALIZE_ERROR: CreateRoom request body"));
         if (Callback)
         {
             Callback(false, FRoomSummary(), TEXT("JSON_SERIALIZE_ERROR"));
@@ -56,7 +54,6 @@ void URoomService::CreateRoom(const FString& Name, int32 MaxPlayers, const FStri
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
             if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: CreateRoom response"));
                 if (Callback)
                 {
                     Callback(false, FRoomSummary(), TEXT("JSON_PARSE_ERROR"));
@@ -67,7 +64,6 @@ void URoomService::CreateRoom(const FString& Name, int32 MaxPlayers, const FStri
             FRoomSummary Summary;
             if (!ParseRoomSummary(RootObject, Summary))
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: Missing fields in CreateRoom response"));
                 if (Callback)
                 {
                     Callback(false, FRoomSummary(), TEXT("JSON_PARSE_ERROR"));
@@ -88,7 +84,6 @@ void URoomService::JoinRoom(const FString& RoomId, const FString& Password, TFun
 {
     if (!ApiClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("JoinRoom failed: ApiClient not initialized"));
         if (Callback)
         {
             Callback(false, FJoinRes(), TEXT("NOT_INITIALIZED"));
@@ -103,7 +98,6 @@ void URoomService::JoinRoom(const FString& RoomId, const FString& Password, TFun
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Content);
     if (!FJsonSerializer::Serialize(Payload, Writer))
     {
-        UE_LOG(LogTemp, Error, TEXT("JSON_SERIALIZE_ERROR: JoinRoom request body"));
         if (Callback)
         {
             Callback(false, FJoinRes(), TEXT("JSON_SERIALIZE_ERROR"));
@@ -129,7 +123,6 @@ void URoomService::JoinRoom(const FString& RoomId, const FString& Password, TFun
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
             if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: JoinRoom response"));
                 if (Callback)
                 {
                     Callback(false, FJoinRes(), TEXT("JSON_PARSE_ERROR"));
@@ -143,7 +136,6 @@ void URoomService::JoinRoom(const FString& RoomId, const FString& Password, TFun
                 !RootObject->TryGetNumberField(TEXT("slot"), SlotValue) ||
                 !ParseRoomPlayers(RootObject, Result.Players))
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: Missing fields in JoinRoom response"));
                 if (Callback)
                 {
                     Callback(false, FJoinRes(), TEXT("JSON_PARSE_ERROR"));
@@ -166,7 +158,6 @@ void URoomService::LeaveRoom(const FString& RoomId, TFunction<void(bool bSuccess
 {
     if (!ApiClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("LeaveRoom failed: ApiClient not initialized"));
         if (Callback)
         {
             Callback(false, TEXT("NOT_INITIALIZED"));
@@ -176,7 +167,6 @@ void URoomService::LeaveRoom(const FString& RoomId, TFunction<void(bool bSuccess
 
     if (RoomId.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("LeaveRoom skipped: RoomId is empty"));
         if (Callback)
         {
             Callback(false, TEXT("INVALID_ROOM"));
@@ -208,7 +198,6 @@ void URoomService::GetRoom(const FString& RoomId, TFunction<void(bool bSuccess, 
 {
     if (!ApiClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("GetRoom failed: ApiClient not initialized"));
         if (Callback)
         {
             Callback(false, FRoomSummary(), TEXT("NOT_INITIALIZED"));
@@ -234,7 +223,6 @@ void URoomService::GetRoom(const FString& RoomId, TFunction<void(bool bSuccess, 
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
             if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: GetRoom response"));
                 if (Callback)
                 {
                     Callback(false, FRoomSummary(), TEXT("JSON_PARSE_ERROR"));
@@ -245,7 +233,6 @@ void URoomService::GetRoom(const FString& RoomId, TFunction<void(bool bSuccess, 
             FRoomSummary Summary;
             if (!ParseRoomSummary(RootObject, Summary))
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: Missing fields in GetRoom response"));
                 if (Callback)
                 {
                     Callback(false, FRoomSummary(), TEXT("JSON_PARSE_ERROR"));
@@ -266,7 +253,6 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
 {
     if (!ApiClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("StartRoom failed: ApiClient not initialized"));
         if (Callback)
         {
             Callback(false, FMatchStartInfo(), TEXT("NOT_INITIALIZED"));
@@ -292,7 +278,6 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyOrError);
             if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: StartRoom response"));
                 if (Callback)
                 {
                     Callback(false, FMatchStartInfo(), TEXT("JSON_PARSE_ERROR"));
@@ -303,7 +288,6 @@ void URoomService::StartRoom(const FString& RoomId, TFunction<void(bool bSuccess
             FString MatchId;
             if (!RootObject->TryGetStringField(TEXT("matchId"), MatchId))
             {
-                UE_LOG(LogTemp, Error, TEXT("JSON_PARSE_ERROR: Missing matchId in StartRoom response"));
                 if (Callback)
                 {
                     Callback(false, FMatchStartInfo(), TEXT("JSON_PARSE_ERROR"));
@@ -414,7 +398,6 @@ bool URoomService::ParseRoomPlayers(const TSharedPtr<FJsonObject>& JsonObject, T
         if (!PlayerObject->TryGetStringField(TEXT("playerId"), Player.PlayerId) ||
             !PlayerObject->TryGetStringField(TEXT("nickname"), Player.Nickname))
         {
-            UE_LOG(LogTemp, Warning, TEXT("JSON_PARSE_ERROR: Invalid player entry"));
             continue;
         }
 

@@ -149,7 +149,6 @@ void UBombTagGameInstance::Init()
     }
     else if (!IsBackendBaseUrlValid(ConfigBackendBaseUrl))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid BackendBaseUrl '%s' in config; using default '%s'"), *ConfigBackendBaseUrl, DefaultBackendBaseUrl);
         BackendBaseUrl = DefaultBackendBaseUrl;
     }
     else
@@ -158,7 +157,6 @@ void UBombTagGameInstance::Init()
         FString UrlToUse = NormalizedUrl;
         if (!IsBackendBaseUrlValid(UrlToUse))
         {
-            UE_LOG(LogTemp, Warning, TEXT("BackendBaseUrl '%s' normalized to invalid value '%s'; using default '%s'"), *ConfigBackendBaseUrl, *UrlToUse, DefaultBackendBaseUrl);
             BackendBaseUrl = DefaultBackendBaseUrl;
             bRewroteConfiguredUrl = false;
         }
@@ -170,15 +168,12 @@ void UBombTagGameInstance::Init()
 
     if (bRewroteConfiguredUrl)
     {
-        UE_LOG(LogTemp, Warning, TEXT("BackendBaseUrl '%s' rewritten to '%s' to match proxy configuration."), *ConfigBackendBaseUrl, *BackendBaseUrl);
         if (GConfig)
         {
             GConfig->SetString(TEXT("Game.Net"), TEXT("BackendBaseUrl"), *BackendBaseUrl, GGameIni);
             GConfig->Flush(false, GGameIni);
         }
     }
-
-    UE_LOG(LogTemp, Log, TEXT("Using backend base URL: %s"), *BackendBaseUrl);
 
     float TimeoutSec = 10.0f;
     GConfig->GetFloat(TEXT("Game.Net"), TEXT("HttpTimeoutSec"), TimeoutSec, GGameIni);
@@ -262,7 +257,6 @@ void UBombTagGameInstance::Init()
             FString Identity = DedicatedServerId;
             if (Identity.IsEmpty())
             {
-                UE_LOG(LogTemp, Warning, TEXT("[Match][Server] DedicatedServerId is empty; API requests will omit identity headers."));
                 Api->ClearLocalPlayerIdentity();
             }
             else
@@ -286,7 +280,6 @@ void UBombTagGameInstance::Init()
     }
 
     BroadcastPlayerRecord();
-    UE_LOG(LogTemp, Log, TEXT("BombTag GameInstance initialized"));
 }
 
 void UBombTagGameInstance::SetPlayerNickname(const FString& NewNickname)
@@ -298,7 +291,6 @@ void UBombTagGameInstance::SetPlayerNickname(const FString& NewNickname)
     Name.TrimStartAndEndInline();
     if (!IsValidNickname(Name))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid nickname: %s"), *Name);
         return;
     }
 
@@ -379,18 +371,9 @@ void UBombTagGameInstance::ResetPlayerRecord()
 
 void UBombTagGameInstance::LeaveSession()
 {
-    UE_LOG(LogTemp, Log, TEXT("LeaveSession"));
-
     if (Room && !CurrentRoomId.IsEmpty())
     {
         const FString RoomIdToLeave = CurrentRoomId;
-        Room->LeaveRoom(RoomIdToLeave, [RoomIdToLeave](bool bSuccess, const FString& Error)
-            {
-                if (!bSuccess)
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("LeaveRoom failed for %s: %s"), *RoomIdToLeave, *Error);
-                }
-            });
     }
 
     ResetCurrentSessionState();
@@ -403,7 +386,6 @@ void UBombTagGameInstance::Backend_Login(const FString& InNickname)
 
     if (NickToUse.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Backend_Login failed: nickname required"));
         OnBackendLogin.Broadcast(false, TEXT("NICKNAME_REQUIRED"));
         return;
     }
@@ -423,7 +405,6 @@ void UBombTagGameInstance::Backend_Login(const FString& InNickname)
         Api->SetLocalPlayerIdentity(PlayerId, PlayerNickname);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("Using local profile for login: %s"), *PlayerNickname);
     OnBackendLogin.Broadcast(true, FString());
 }
 
@@ -431,7 +412,6 @@ void UBombTagGameInstance::Backend_CreateRoom(const FString& Name, int32 MaxPlay
 {
     if (!Room)
     {
-        UE_LOG(LogTemp, Error, TEXT("Backend_CreateRoom failed: Room service not ready"));
         OnRoomJoined.Broadcast(false, TEXT("NOT_INITIALIZED"));
         return;
     }
@@ -440,13 +420,11 @@ void UBombTagGameInstance::Backend_CreateRoom(const FString& Name, int32 MaxPlay
         {
             if (!bSuccess)
             {
-                UE_LOG(LogTemp, Error, TEXT("CreateRoom failed: %s"), *Error);
                 OnRoomJoined.Broadcast(false, Error);
                 return;
             }
 
             CurrentRoomId = RoomSummary.RoomId;
-            UE_LOG(LogTemp, Log, TEXT("Room created: %s"), *CurrentRoomId);
 
             bRoomHasStarted = false;
 
@@ -459,7 +437,6 @@ void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString
 {
     if (!Room)
     {
-        UE_LOG(LogTemp, Error, TEXT("Backend_JoinRoom failed: Room service not ready"));
         OnRoomJoined.Broadcast(false, TEXT("NOT_INITIALIZED"));
         return;
     }
@@ -468,13 +445,11 @@ void UBombTagGameInstance::Backend_JoinRoom(const FString& RoomId, const FString
         {
             if (!bSuccess)
             {
-                UE_LOG(LogTemp, Error, TEXT("JoinRoom failed: %s"), *Error);
                 OnRoomJoined.Broadcast(false, Error);
                 return;
             }
 
             CurrentRoomId = Result.RoomId;
-            UE_LOG(LogTemp, Log, TEXT("Joined room %s (slot %d)"), *Result.RoomId, Result.Slot);
 
             bRoomHasStarted = false;
 
@@ -495,13 +470,11 @@ void UBombTagGameInstance::Backend_GetRoom()
 {
     if (!Room)
     {
-        UE_LOG(LogTemp, Error, TEXT("Backend_GetRoom failed: Room service not ready"));
         return;
     }
 
     if (CurrentRoomId.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Backend_GetRoom skipped: CurrentRoomId is empty"));
         return;
     }
 
@@ -509,18 +482,15 @@ void UBombTagGameInstance::Backend_GetRoom()
         {
             if (!bSuccess)
             {
-                UE_LOG(LogTemp, Error, TEXT("GetRoom failed: %s"), *Error);
                 if (Error.Contains(TEXT("ROOM_NOT_FOUND")))
                 {
                     const FString LostRoomId = CurrentRoomId;
-                    UE_LOG(LogTemp, Warning, TEXT("Room %s no longer exists; clearing local room state"), *LostRoomId);
                     ResetCurrentSessionState();
                     OnRoomClosed.Broadcast(TEXT("ROOM_NOT_FOUND"));
                 }
                 return;
             }
 
-            UE_LOG(LogTemp, Log, TEXT("Room %s status=%s players=%d"), *RoomSummary.RoomId, *RoomSummary.Status, RoomSummary.CurrentPlayers);
             OnRoomUpdated.Broadcast(RoomSummary);
 
             if (RoomSummary.Status.Equals(TEXT("STARTED"), ESearchCase::IgnoreCase) && !bRoomHasStarted)
@@ -651,13 +621,6 @@ void UBombTagGameInstance::PrepareMatchLaunch(const FString& DedicatedServerAddr
     const FString DsLabel = BombTag::Logging::DescribeOptionalForLog(DSId);
     const FString ExpirationLabel = BombTag::Logging::DescribeOptionalForLog(StartTokenExpiresAt, TEXT("<unspecified>"));
     const FString TokenPreview = BombTag::Logging::DescribeTokenForLog(StartToken);
-
-    UE_LOG(LogTemp, Log, TEXT("[Match][Client] PrepareMatchLaunch serverAddress=%s port=%d dsId=%s startToken=%s expiresAt=%s"),
-        *AddressLabel,
-        PendingMatchServerPort,
-        *DsLabel,
-        *TokenPreview,
-        *ExpirationLabel);
 #endif
 }
 
@@ -703,14 +666,12 @@ void UBombTagGameInstance::Backend_StartRoom()
 {
     if (!Room)
     {
-        UE_LOG(LogTemp, Error, TEXT("Backend_StartRoom failed: Room service not ready"));
         OnRoomStarted.Broadcast(false, TEXT("NOT_INITIALIZED"));
         return;
     }
 
     if (CurrentRoomId.IsEmpty())
     {
-        UE_LOG(LogTemp, Error, TEXT("Backend_StartRoom failed: CurrentRoomId is empty"));
         OnRoomStarted.Broadcast(false, TEXT("NO_ROOM"));
         return;
     }
@@ -719,12 +680,10 @@ void UBombTagGameInstance::Backend_StartRoom()
         {
             if (!bSuccess)
             {
-                UE_LOG(LogTemp, Error, TEXT("StartRoom failed: %s"), *Error);
                 OnRoomStarted.Broadcast(false, Error);
                 return;
             }
 
-            UE_LOG(LogTemp, Log, TEXT("MatchId=%s dedicatedAddress=%s port=%d dsId=%s"), *Info.MatchId, *Info.DedicatedServerAddress, Info.DedicatedServerPort, *Info.DedicatedServerId);
             bRoomHasStarted = true;
             PendingMatchId = Info.MatchId;
             PrepareMatchLaunch(Info.DedicatedServerAddress, Info.DedicatedServerPort, Info.StartToken, Info.DedicatedServerId, Info.StartTokenExpiresAt);
@@ -798,14 +757,12 @@ void UBombTagGameInstance::RequestServerMatchStart()
 
     if (RoomIdentifier.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] RequestServerMatchStart skipped: no room or match identifier available."));
         return;
     }
 
     const FString TravelURL = GetPendingMatchTravelURL();
     if (TravelURL.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] RequestServerMatchStart skipped: match server endpoint unavailable."));
         return;
     }
 
@@ -817,18 +774,12 @@ void UBombTagGameInstance::RequestServerMatchStart()
             {
                 OnBackendTraffic.Broadcast(FTrafficMsgFactory::MakeStartRequestInfo(RoomIdentifier, PendingMatchServerAddress, PendingMatchServerPort, TravelURL));
                 const FString DsLabel = !PendingMatchDedicatedServerId.IsEmpty() ? PendingMatchDedicatedServerId : TEXT("<unknown-ds>");
-                UE_LOG(LogTemp, Log, TEXT("[Match] Requesting dedicated match start via RPC (room=%s dedicatedServerId=%s address=%s port=%d url=%s)."), *RoomIdentifier, *DsLabel, *PendingMatchServerAddress, PendingMatchServerPort, *TravelURL);
                 BTPC->ServerRequestStartMatch(RoomIdentifier, PendingMatchStartToken, PendingMatchServerAddress, PendingMatchServerPort, TravelURL);
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("[Match][Error] First PC is not ABombTagPlayerController; cannot request start."));
                 return;
             }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] No player controller available for match start request."));
         }
     }
 }
@@ -877,7 +828,6 @@ void UBombTagGameInstance::BroadcastPlayerRecord()
 void UBombTagGameInstance::HandleBackendTraffic(const FTrafficMsg& Message)
 {
 #if !UE_BUILD_SHIPPING
-    UE_LOG(LogTemp, Log, TEXT("[Backend][Traffic] %s"), *Message.Text.ToString());
 #endif
     OnBackendTraffic.Broadcast(Message);
 }
@@ -901,13 +851,11 @@ void UBombTagGameInstance::NotifyBackendDedicatedServerReady()
 
     if (!Api)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DedicatedServer] Backend API client not initialized; cannot send READY notification."));
         return;
     }
 
     if (DedicatedServerId.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DedicatedServer] DedicatedServerId is empty; skipping READY notification."));
         return;
     }
 
@@ -935,26 +883,7 @@ void UBombTagGameInstance::NotifyBackendDedicatedServerReady()
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Content);
     FJsonSerializer::Serialize(Payload.ToSharedRef(), Writer);
 
-    UE_LOG(LogTemp, Log, TEXT("[DedicatedServer] Notifying backend of READY state (dsId=%s public=%s:%d internal=%s)"),
-        *DedicatedServerId,
-        *DedicatedServerPublicAddress,
-        DedicatedServerGamePort,
-        *DedicatedServerInternalAddress);
-
-    Api->PostJson(TEXT("/ds/register"), Content, FOnApiResponse::CreateUObject(
-        this, &UBombTagGameInstance::OnNotifyDedicatedServerReadyResponse));
-}
-
-void UBombTagGameInstance::OnNotifyDedicatedServerReadyResponse(bool bSuccess, const FString& BodyOrError)
-{
-    if (bSuccess)
-    {
-        UE_LOG(LogTemp, Log, TEXT("[DedicatedServer] Backend acknowledged READY registration."));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DedicatedServer] Failed to notify backend about READY state: %s"), *BodyOrError);
-    }
+    Api->PostJson(TEXT("/ds/register"), Content, FOnApiResponse());
 }
 
 void UBombTagGameInstance::EnsureNicknameIsValid()
@@ -965,7 +894,6 @@ void UBombTagGameInstance::EnsureNicknameIsValid()
     Name.TrimStartAndEndInline();
     if (!Name.IsEmpty() && !IsValidNickname(Name))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Loaded invalid nickname '%s' - clearing saved nickname"), *Name);
         PlayerSaveGame->Nickname.Empty();
         SavePlayerData();
     }

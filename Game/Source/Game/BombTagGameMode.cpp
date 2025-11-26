@@ -26,7 +26,6 @@ ABombTagGameMode::ABombTagGameMode()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to find default pawn class '/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter'. Falling back to ABombTagCharacter."));
         DefaultPawnClass = ABombTagCharacter::StaticClass();
     }
 
@@ -44,7 +43,6 @@ void ABombTagGameMode::BeginPlay()
     Super::BeginPlay();
     const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(this, true);
     const FString DedicatedServerLabel = BombTag::GameMode::ResolveDedicatedServerLabel(Cast<UBombTagGameInstance>(GetGameInstance()));
-    UE_LOG(LogTemp, Log, TEXT("[Match] CurrentMap=%s GameMode=%s Seamless=%s DedicatedServer=%s"), *CurrentMap, *GetClass()->GetName(), bUseSeamlessTravel ? TEXT("true") : TEXT("false"), *DedicatedServerLabel);
     BeginStartCountdown();
 }
 
@@ -236,13 +234,11 @@ void ABombTagGameMode::RegisterMatchResultSubmission(ABombTagPlayerController* P
 
     if (!PendingMatchParticipants.Contains(PlayerController))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Received match result submission from unexpected controller %s"), *GetNameSafe(PlayerController));
         return;
     }
 
     if (RespondedMatchParticipants.Contains(PlayerController))
     {
-        UE_LOG(LogTemp, Verbose, TEXT("Ignoring duplicate match result submission from %s"), *GetNameSafe(PlayerController));
         return;
     }
 
@@ -252,10 +248,6 @@ void ABombTagGameMode::RegisterMatchResultSubmission(ABombTagPlayerController* P
     {
         int32& VoteCount = PendingMatchResultVotes.FindOrAdd(ResultHash);
         ++VoteCount;
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Controller %s rejected the proposed match result"), *GetNameSafe(PlayerController));
     }
 
     EvaluateMatchResultSubmissions();
@@ -281,7 +273,6 @@ void ABombTagGameMode::EvaluateMatchResultSubmissions()
     {
         if (*VoteCount >= Quorum)
         {
-            UE_LOG(LogTemp, Log, TEXT("Match result quorum reached with %d/%d confirmations."), *VoteCount, ParticipantCount);
             FinalizeMatchResult(PendingMatchResultSnapshot);
             return;
         }
@@ -289,8 +280,6 @@ void ABombTagGameMode::EvaluateMatchResultSubmissions()
 
     if (RespondedMatchParticipants.Num() >= ParticipantCount)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Match result quorum not reached (%d/%d). Using server authoritative snapshot."),
-            PendingMatchResultVotes.FindRef(PendingMatchResultHash), ParticipantCount);
         FinalizeMatchResult(PendingMatchResultSnapshot);
     }
 }
@@ -335,14 +324,12 @@ void ABombTagGameMode::ScheduleReturnToMenu()
 
     if (MenuReturnURL.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] MenuReturnURL is empty; cannot return to menu."));
         return;
     }
 
     const float Delay = FMath::Max(0.f, ReturnToMenuDelay);
     if (Delay <= KINDA_SMALL_NUMBER)
     {
-        // 즉시 복귀해야 하면 타이머를 사용하지 않고 바로 처리한다.
         HandleReturnToMenu();
         return;
     }
@@ -356,7 +343,6 @@ void ABombTagGameMode::HandleReturnToMenu()
 
     if (MenuReturnURL.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Match][Warn] MenuReturnURL is empty; cannot return to menu."));
         return;
     }
 
@@ -366,13 +352,11 @@ void ABombTagGameMode::HandleReturnToMenu()
     bUseSeamlessTravel = true;
 
     const FString DedicatedServerLabel = BombTag::GameMode::ResolveDedicatedServerLabel(Cast<UBombTagGameInstance>(GetGameInstance()));
-    UE_LOG(LogTemp, Log, TEXT("[Match] ServerTravel to %s (Map=%s GameMode=%s DedicatedServer=%s Seamless=%s)"), *MenuReturnURL, *MapName, *GameModePath, *DedicatedServerLabel, bUseSeamlessTravel ? TEXT("true") : TEXT("false"));
-
+    
     if (UBombTagGameInstance* GameInstance = Cast<UBombTagGameInstance>(GetGameInstance()))
     {
         if (GameInstance->IsRunningDedicatedServer())
         {
-            UE_LOG(LogTemp, Log, TEXT("[DedicatedServer] Re-registering as READY after match completion."));
             GameInstance->NotifyBackendDedicatedServerReady();
         }
     }

@@ -41,19 +41,6 @@ public class MatchController {
                 status.startTokenExpiresAt() == null ? null : status.startTokenExpiresAt().toString()
         );
 
-        if (response.startToken() != null && !response.startToken().isBlank()) {
-            log.info("Issuing MatchQueueStatus ticketId={} status={} matchId={} dedicatedServerAddress={} " +
-                            "dedicatedServerPort={} dedicatedServerId={} startToken={} startTokenExpiresAt={}",
-                    response.ticketId(),
-                    response.status(),
-                    response.matchId(),
-                    response.dedicatedServerAddress(),
-                    response.dedicatedServerPort(),
-                    response.dedicatedServerId(),
-                    response.startToken(),
-                    response.startTokenExpiresAt());
-        }
-
         return response;
     }
 
