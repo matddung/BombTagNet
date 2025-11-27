@@ -33,7 +33,7 @@ public:
     void HandlePawnChanged(APawn* NewPawn);
 
 private:
-    UPROPERTY(meta = (BindWidgetOptional))
+    UPROPERTY(meta = (BindWidget))
     TObjectPtr<UButton> Btn_Interact;
 
     mutable TWeakObjectPtr<ABombTagCharacter> CachedCharacter;

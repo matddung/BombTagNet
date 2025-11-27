@@ -28,6 +28,12 @@ ABombTagPlayerController::ABombTagPlayerController()
     {
         HUDWidgetClass = HUDBPClass.Class;
     }
+
+    static ConstructorHelpers::FClassFinder<UUserWidget> MobileControlsBPClass(TEXT("/Game/UI/UI_TouchSimple"));
+    if (MobileControlsBPClass.Succeeded())
+    {
+        MobileControlsWidgetClass = MobileControlsBPClass.Class;
+    }
 #endif
 }
 
